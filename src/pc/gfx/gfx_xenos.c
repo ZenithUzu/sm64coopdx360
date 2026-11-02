@@ -239,6 +239,8 @@ static void draw(float data[], size_t count, size_t triangles) {
 // The game uses a smaller render target. XAM always receives the full 720p
 // front buffer, so opening the Guide doesn't change the display's mode or layout.
 void gfx_xenos_present(uint32_t address, uint32_t output_width, uint32_t output_height) {
+    // Neither copy clears: the 720p target's depth overlaps the game target's color.
+    xsdk_gpu_set_resolve_clears(false,false);
     xsdk_gpu_resolve_texture(&scene_texture,0xFF000000);
     xsdk_gpu_invalidate(scene_texture.address,scene_texture.size_bytes);
     xsdk_gpu_set_target(output_width,output_height);
@@ -258,6 +260,12 @@ void gfx_xenos_present(uint32_t address, uint32_t output_width, uint32_t output_
     xsdk_gpu_set_vertices(0,xsdk_gpu_address(upscale_vertices),6*4*sizeof(float));
     xsdk_gpu_draw(XSDK_PRIMITIVE_TRIANGLE_LIST,6);
     xsdk_gpu_resolve(address,output_width,output_height,0xFF000000);
+    xsdk_gpu_set_resolve_clears(true,true);
+    // Clear last at the game's size: this is the engine's start-of-frame clear, and
+    // hierarchical depth only stays on for the surface of the latest whole clear.
+    // The copy overwrites scene_texture, which nothing reads until the next resolve.
+    xsdk_gpu_set_target(scene_texture.width,scene_texture.height);
+    xsdk_gpu_resolve_texture(&scene_texture,0xFF000000);
 }
 static void init(void) {
     checked(xsdk_shader_load(&vertex_shader, coopdx_vert.container, coopdx_vert.container_bytes), "vertex shader load");

@@ -20,7 +20,7 @@ Este repositorio publica código fuente y documentación. **No incluye ROM, XEX,
 
 La última prueba de hardware corresponde a la iteración 11: aproximadamente 15–20 FPS fuera del castillo, 30–60 variables dentro, 7 FPS en Bob-omb Battlefield y 10 FPS en el menú. Son observaciones del usuario, no benchmarks controlados.
 
-**El código actual es la iteración 12, compilada pero aún sin instalar/probar en consola.** Separa el renderizado del juego a 640×360 de la presentación a 1280×720, con un pase de ampliación GPU para conservar la ruta de la Guía. No se promete una mejora de FPS ni estabilidad de esa ruta hasta validarla en hardware.
+**El código actual es la iteración 13, compilada pero aún sin instalar/probar en consola.** Separa el renderizado del juego a 640×360 de la presentación a 1280×720, con un pase de ampliación GPU para conservar la ruta de la Guía. No se promete una mejora de FPS ni estabilidad de esa ruta hasta validarla en hardware.
 
 ## Construcción local
 
