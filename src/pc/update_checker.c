@@ -1,3 +1,7 @@
+#if defined(__XSDK__)
+#include "update_checker.h"
+bool gUpdateMessage = false; void show_update_popup(void) {} void check_for_updates(void) {}
+#else
 #include <stdio.h>
 #if defined(_WIN32)
 #include <windows.h>
@@ -195,3 +199,5 @@ void check_for_updates(void) {
         gUpdateMessage = true;
     }
 }
+
+#endif

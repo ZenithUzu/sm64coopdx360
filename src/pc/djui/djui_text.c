@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include <string.h>
 #include "djui.h"
 #include "djui_unicode.h"

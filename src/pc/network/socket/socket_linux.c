@@ -5,7 +5,13 @@
 
 SOCKET socket_initialize(void) {
     // initialize socket
-    SOCKET sock = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
+    SOCKET sock = socket(
+#if defined(__XSDK__)
+        AF_INET,
+#else
+        AF_INET6,
+#endif
+        SOCK_DGRAM, IPPROTO_UDP);
     if (sock == INVALID_SOCKET) {
         LOG_ERROR("socket failed with error %d", SOCKET_LAST_ERROR);
         return INVALID_SOCKET;
@@ -18,6 +24,7 @@ SOCKET socket_initialize(void) {
         return INVALID_SOCKET;
     }
 
+#if !defined(__XSDK__)
     // Set socket to dual-stack
     int v6only = 0;
     if (setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY, (void *)&v6only, sizeof(v6only)) < 0) {
@@ -25,6 +32,7 @@ SOCKET socket_initialize(void) {
         return INVALID_SOCKET;
     };
 
+#endif
     LOG_INFO("socket initialized.");
 
     return sock;

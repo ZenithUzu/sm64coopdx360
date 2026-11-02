@@ -30,7 +30,7 @@ static s16 READ16(struct RomAsset* asset) {
     s64 index = (asset->segmentedAddress + asset->cursor);
     if (index < 0 || index >= sCurrentSegmentSize) { return 0; }
     u8* ptr = &sCurrentSegmentMemory[index];
-    s16 value = BSWAP16(*((s16*)ptr));
+    s16 value = BE_TO_HOST16(*((s16*)ptr));
     asset->cursor += sizeof(s16);
     return value;
 }
@@ -203,18 +203,18 @@ void rom_assets_queue(void* ptr, enum RomAssetType assetType, u32 physicalAddres
 }
 
 u8* rom_assets_decompress(u32* data, u32* decompressedSize) {
-    if (BSWAP32(data[0]) != 0x4d494f30) {
+    if (BE_TO_HOST32(data[0]) != 0x4d494f30) {
         return NULL;
     }
 
     // ripped from tools/gen_asset_list.cpp
     uint32_t* src = data;
-    uint32_t size = BSWAP32(src[1]);
+    uint32_t size = BE_TO_HOST32(src[1]);
     u8* output = calloc(size, 1);
     char *dest = (char *)output;
     char *destEnd = (size + dest);
-    uint16_t *cmpOffset = (uint16_t *)((char *)src + BSWAP32(src[2]));
-    char *rawOffset = ((char *)src + BSWAP32(src[3]));
+    uint16_t *cmpOffset = (uint16_t *)((char *)src + BE_TO_HOST32(src[2]));
+    char *rawOffset = ((char *)src + BE_TO_HOST32(src[3]));
     int counter = 0;
     uint32_t controlBits;
 
@@ -223,7 +223,7 @@ u8* rom_assets_decompress(u32* data, u32* decompressedSize) {
     while (dest != destEnd) {
         if (counter == 0) {
             controlBits = *src++;
-            controlBits = BSWAP32(controlBits);
+            controlBits = BE_TO_HOST32(controlBits);
             counter = 32;
         }
 
@@ -232,7 +232,7 @@ u8* rom_assets_decompress(u32* data, u32* decompressedSize) {
         }
         else {
             uint16_t dcmpParam = *cmpOffset++;
-            dcmpParam = BSWAP16(dcmpParam);
+            dcmpParam = BE_TO_HOST16(dcmpParam);
             int dcmpCount = (dcmpParam >> 12) + 3;
             char* dcmpPtr = dest - (dcmpParam & 0x0FFF);
 

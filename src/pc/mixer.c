@@ -359,8 +359,11 @@ void OPTIMIZE_O3 aADPCMdecImpl(uint8_t flags, ADPCM_STATE state) {
             int16_t prev2 = out[-2];
             int j, k;
             for (j = 0; j < 4; j++) {
-                ins[j * 2] = (((*in >> 4) << 28) >> 28) << shift;
-                ins[j * 2 + 1] = (((*in++ & 0xf) << 28) >> 28) << shift;
+                // Sign-extend ADPCM nibbles without overflowing a signed left shift.
+                int hi = *in >> 4;
+                int lo = *in++ & 0xf;
+                ins[j * 2] = (hi < 8 ? hi : hi - 16) * (1 << shift);
+                ins[j * 2 + 1] = (lo < 8 ? lo : lo - 16) * (1 << shift);
             }
             for (j = 0; j < 8; j++) {
                 int32_t acc = tbl[0][j] * prev2 + tbl[1][j] * prev1 + (ins[j] << 11);

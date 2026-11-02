@@ -698,6 +698,10 @@ bool can_update_game(void) {
 }
 
 void update_game(void) {
+#if defined(__XSDK__)
+    // Desktop updater executables cannot run on the console.
+    return;
+#else
     const char *updateExecFilePath = get_update_path();
 
 #ifdef _WIN32
@@ -721,5 +725,6 @@ void update_game(void) {
     fclose(stderr);
     execl(updateExecFilePath, "coopdx_updater", "--game-update", NULL);
     exit(1);
+#endif
 #endif
 }

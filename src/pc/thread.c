@@ -42,7 +42,12 @@ int init_thread(struct ThreadHandle *handle, void *(*entry)(void *), void *arg, 
     // In truth, This honestly shouldn't be used on PC. But if somebody wants
     // a really managed stack? This is possible.
     if (sp != NULL && sp_size > 0) {
+#if defined(__XSDK__)
+        // Xenon kernel owns the stack allocation; request its size, not its address.
+        err = pthread_attr_setstacksize(&thattr, sp_size);
+#else
         err = pthread_attr_setstack(&thattr, sp, sp_size);
+#endif
         assert(err == 0);
     }
 
@@ -78,9 +83,12 @@ int detach_thread(struct ThreadHandle *handle) {
 
 // Call from inside the thread you wish to
 // terminate.
+#if !defined(__XSDK__)
 void exit_thread() {
     pthread_exit(NULL);
 }
+
+#endif
 
 int stop_thread(struct ThreadHandle *handle) {
     assert(handle != NULL);

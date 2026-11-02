@@ -4,8 +4,14 @@
 
 #include "../configfile.h"
 
+#if defined(__XSDK__)
+#include "controller_xsdk.h"
+#include "controller_keyboard.h"
+#include "platform/xsdk/input_usb.h"
+#else
 #include "controller_keyboard.h"
 #include "controller_sdl.h"
+#endif
 
 // Analog camera movement by Pathétique (github.com/vrmiguel), y0shin and Mors
 // Contribute or communicate bugs at github.com/vrmiguel/sm64-analog-camera
@@ -13,8 +19,14 @@
 // moved these from sdl controller implementations
 
 static struct ControllerAPI *controller_implementations[] = {
+#if defined(__XSDK__)
+    &controller_xsdk,
+    &controller_keyboard,
+    &controller_usb_mouse,
+#else
     &controller_sdl,
     &controller_keyboard,
+#endif
 };
 
 s32 osContInit(UNUSED OSMesgQueue *mq, u8 *controllerBits, UNUSED OSContStatus *status) {

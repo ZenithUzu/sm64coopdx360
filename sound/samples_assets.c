@@ -1,6 +1,11 @@
 #include "pc/rom_assets.h"
 #include "sound_data.h"
+#if defined(__XSDK__)
+// Search generated target headers before the source directory's PC offsets.
+#include <sound/samples_offsets.h>
+#else
 #include "samples_offsets.h"
+#endif
 
 ROM_ASSET_LOAD_SAMPLE(sfx_1_00_twirl_aifc, &gSoundDataRaw[SAMPLE_sfx_1_00_twirl_aifc], 0x005936a0, 1774, 0x00000000, 1774);
 ROM_ASSET_LOAD_SAMPLE(sfx_1_01_brushing_aifc, &gSoundDataRaw[SAMPLE_sfx_1_01_brushing_aifc], 0x00593d90, 10440, 0x00000000, 10440);

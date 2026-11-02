@@ -488,9 +488,9 @@ u8 gDefaultShortNoteDurationTable[16] = {
 };
 
 struct AdsrEnvelope gDefaultEnvelope[] = {
-    { BSWAP16(4), BSWAP16(32000) },    // go from 0 to 32000 over the course of 16ms
-    { BSWAP16(1000), BSWAP16(32000) }, // stay there for 4.16 seconds
-    { BSWAP16(ADSR_HANG), 0 }          // then continue staying there
+    { BE_TO_HOST16(4), BE_TO_HOST16(32000) },    // go from 0 to 32000 over the course of 16ms
+    { BE_TO_HOST16(1000), BE_TO_HOST16(32000) }, // stay there for 4.16 seconds
+    { BE_TO_HOST16(ADSR_HANG), 0 }          // then continue staying there
 };
 
 u8 unk_sh_data2[4] = { 0, 0, 0, 0 };

@@ -1,4 +1,5 @@
 #include "dynos.cpp.h"
+#include "level_script_read.h"
 extern "C" {
 #include "game/segment2.h"
 #include "game/save_file.h"
@@ -54,9 +55,14 @@ static s32 sDynosCustomLevelSlot[LEVEL_UNKNOWN_2 + 1] = { 0 };
 
 u64 DynOS_Level_CmdGet(void *aCmd, u64 aOffset) {
     u64 _Offset = (((aOffset) & 3llu) | (((aOffset) & ~3llu) << (sizeof(void *) >> 3llu)));
+#if IS_BIG_ENDIAN
+    // A 32-bit pointer must not consume the following command word.
+    return level_script_read_pointer(aCmd, (size_t)aOffset);
+#else
     u64 value = 0;
     memcpy(&value, (void *) ((uintptr_t) aCmd + _Offset), sizeof(value));
     return value;
+#endif
 }
 
 LvlCmd *DynOS_Level_CmdNext(LvlCmd *aCmd) {
@@ -91,21 +97,21 @@ static s32 DynOS_Level_PreprocessScript(u8 aType, void *aCmd) {
 
         // AREA
         case 0x1F: {
-            sDynosAreaIndex = (u8) DynOS_Level_CmdGet(aCmd, 2);
+            sDynosAreaIndex = (u8) level_script_read_field(aCmd, 2, 1);
         } break;
 
         // OBJECT
         case 0x24: {
-            const BehaviorScript *bhv = (const BehaviorScript *) DynOS_Level_CmdGet(aCmd, 20);
+            const BehaviorScript *bhv = (const BehaviorScript *) level_script_read_pointer(aCmd, 20);
             for (s32 i = 0; i < 20; ++i) {
                 if (sWarpBhvSpawnTable[i] == bhv) {
-                    DynosWarp *_Warp = DynOS_Level_GetWarpStruct(((((u32) DynOS_Level_CmdGet(aCmd, 16)) >> 16) & 0xFF));
+                    DynosWarp *_Warp = DynOS_Level_GetWarpStruct(((((u32) level_script_read_field(aCmd, 16, 4)) >> 16) & 0xFF));
                     if (_Warp->mType == -1) {
                         _Warp->mType = i;
-                        _Warp->mPosX = (s16) DynOS_Level_CmdGet(aCmd, 4);
-                        _Warp->mPosY = (s16) DynOS_Level_CmdGet(aCmd, 6);
-                        _Warp->mPosZ = (s16) DynOS_Level_CmdGet(aCmd, 8);
-                        _Warp->mAngle = ((s16) DynOS_Level_CmdGet(aCmd, 12) * 0x8000) / 180;
+                        _Warp->mPosX = (s16) level_script_read_field(aCmd, 4, 2);
+                        _Warp->mPosY = (s16) level_script_read_field(aCmd, 6, 2);
+                        _Warp->mPosZ = (s16) level_script_read_field(aCmd, 8, 2);
+                        _Warp->mAngle = ((s16) level_script_read_field(aCmd, 12, 2) * 0x8000) / 180;
                     }
                     break;
                 }
@@ -115,22 +121,22 @@ static s32 DynOS_Level_PreprocessScript(u8 aType, void *aCmd) {
         // WARP_NODE or PAINTING_WARP_NODE
         case 0x26:
         case 0x27: {
-            DynosWarp *_Warp = DynOS_Level_GetWarpStruct((u8) DynOS_Level_CmdGet(aCmd, 2));
+            DynosWarp *_Warp = DynOS_Level_GetWarpStruct((u8) level_script_read_field(aCmd, 2, 1));
             if (_Warp->mDestLevel == 0) {
-                _Warp->mDestLevel = (u8) DynOS_Level_CmdGet(aCmd, 3);
-                _Warp->mDestArea = (u8) DynOS_Level_CmdGet(aCmd, 4);
-                _Warp->mDestId = (u8) DynOS_Level_CmdGet(aCmd, 5);
+                _Warp->mDestLevel = (u8) level_script_read_field(aCmd, 3, 1);
+                _Warp->mDestArea = (u8) level_script_read_field(aCmd, 4, 1);
+                _Warp->mDestId = (u8) level_script_read_field(aCmd, 5, 1);
             }
         } break;
 
         // MARIO_POS
         case 0x2B: {
             DynosWarp *_Warp = DynOS_Level_GetWarpStruct(DYNOS_LEVEL_MARIO_POS_WARP_ID);
-            _Warp->mArea = (s16) DynOS_Level_CmdGet(aCmd, 2);
-            _Warp->mAngle = ((s16) DynOS_Level_CmdGet(aCmd, 4) * 0x8000) / 180 - 0x8000;
-            _Warp->mPosX = (s16) DynOS_Level_CmdGet(aCmd, 6);
-            _Warp->mPosY = (s16) DynOS_Level_CmdGet(aCmd, 8);
-            _Warp->mPosZ = (s16) DynOS_Level_CmdGet(aCmd, 10);
+            _Warp->mArea = (s16) level_script_read_field(aCmd, 2, 1);
+            _Warp->mAngle = ((s16) level_script_read_field(aCmd, 4, 2) * 0x8000) / 180 - 0x8000;
+            _Warp->mPosX = (s16) level_script_read_field(aCmd, 6, 2);
+            _Warp->mPosY = (s16) level_script_read_field(aCmd, 8, 2);
+            _Warp->mPosZ = (s16) level_script_read_field(aCmd, 10, 2);
             _Warp->mType = MARIO_SPAWN_IDLE - 1;
             _Warp->mDestLevel = sDynosCurrentLevelNum;
             _Warp->mDestArea = _Warp->mArea;
@@ -144,7 +150,7 @@ static s32 DynOS_Level_PreprocessScript(u8 aType, void *aCmd) {
 
         // TERRAIN
         case 0x2E: {
-            sDynosLevelCollision[sDynosCurrentLevelNum][sDynosAreaIndex] = (Collision*) DynOS_Level_CmdGet(aCmd, 4);
+            sDynosLevelCollision[sDynosCurrentLevelNum][sDynosAreaIndex] = (Collision*) level_script_read_pointer(aCmd, 4);
         } break;
     }
 
@@ -277,12 +283,12 @@ static LvlCmd *DynOS_Level_CmdExecute(Stack &aStack, LvlCmd *aCmd) {
     StackPush(aStack, DynOS_Level_CmdNext(aCmd));
     StackPush(aStack, aStack.mBaseIndex);
     aStack.mBaseIndex = aStack.mTopIndex;
-    return (LvlCmd *) DynOS_Level_CmdGet(aCmd, 12);
+    return (LvlCmd *) level_script_read_pointer(aCmd, 12);
 }
 
 static LvlCmd *DynOS_Level_CmdExitAndExecute(Stack &aStack, LvlCmd *aCmd) {
     aStack.mTopIndex = aStack.mBaseIndex;
-    return (LvlCmd *) DynOS_Level_CmdGet(aCmd, 12);
+    return (LvlCmd *) level_script_read_pointer(aCmd, 12);
 }
 
 static LvlCmd *DynOS_Level_CmdExit(Stack &aStack, LvlCmd *aCmd) {
@@ -292,12 +298,12 @@ static LvlCmd *DynOS_Level_CmdExit(Stack &aStack, LvlCmd *aCmd) {
 }
 
 static LvlCmd *DynOS_Level_CmdJump(Stack &aStack, LvlCmd *aCmd) {
-    return (LvlCmd *) DynOS_Level_CmdGet(aCmd, 4);
+    return (LvlCmd *) level_script_read_pointer(aCmd, 4);
 }
 
 static LvlCmd *DynOS_Level_CmdJumpLink(Stack &aStack, LvlCmd *aCmd) {
     StackPush(aStack, DynOS_Level_CmdNext(aCmd));
-    return (LvlCmd *) DynOS_Level_CmdGet(aCmd, 4);
+    return (LvlCmd *) level_script_read_pointer(aCmd, 4);
 }
 
 static LvlCmd *DynOS_Level_CmdReturn(Stack &aStack, UNUSED LvlCmd *aCmd) {
@@ -306,7 +312,7 @@ static LvlCmd *DynOS_Level_CmdReturn(Stack &aStack, UNUSED LvlCmd *aCmd) {
 
 static LvlCmd *DynOS_Level_CmdJumpLinkPushArg(Stack &aStack, LvlCmd *aCmd) {
     StackPush(aStack, DynOS_Level_CmdNext(aCmd));
-    StackPush(aStack, DynOS_Level_CmdGet(aCmd, 2));
+    StackPush(aStack, level_script_read_field(aCmd, 2, 2));
     return DynOS_Level_CmdNext(aCmd);
 }
 
@@ -328,16 +334,16 @@ static LvlCmd *DynOS_Level_CmdLoopUntil(Stack &aStack, LvlCmd *aCmd) {
 
 static LvlCmd *DynOS_Level_CmdJumpIf(Stack &aStack, LvlCmd *aCmd) {
     StackPush(aStack, DynOS_Level_CmdNext(aCmd)); /* Not an error, that's intentional */
-    return (LvlCmd *) DynOS_Level_CmdGet(aCmd, 8);
+    return (LvlCmd *) level_script_read_pointer(aCmd, 8);
 }
 
 static LvlCmd *DynOS_Level_CmdJumpLinkIf(Stack &aStack, LvlCmd *aCmd) {
     StackPush(aStack, DynOS_Level_CmdNext(aCmd));
-    return (LvlCmd *) DynOS_Level_CmdGet(aCmd, 8);
+    return (LvlCmd *) level_script_read_pointer(aCmd, 8);
 }
 
 static LvlCmd *DynOS_Level_CmdJumpArea(Stack &aStack, LvlCmd *aCmd, s32 (*aPreprocessFunction)(u8, void *)) {
-    DynOS_Level_ParseScript((const void *) DynOS_Level_CmdGet(aCmd, 8), aPreprocessFunction);
+    DynOS_Level_ParseScript((const void *) level_script_read_pointer(aCmd, 8), aPreprocessFunction);
     return DynOS_Level_CmdNext(aCmd);
 }
 

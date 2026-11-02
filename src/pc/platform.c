@@ -87,7 +87,17 @@ void sys_fatal(const char *fmt, ...) {
     sys_fatal_impl(msg);
 }
 
-#ifdef _WIN32
+#if defined(__XSDK__)
+const char *sys_user_path(void) { return "game:/save"; }
+const char *sys_resource_path(void) { return "game:"; }
+const char *sys_exe_path_dir(void) { return "game:"; }
+const char *sys_exe_path_file(void) { return "game:/sm64coopdx.xex"; }
+static void sys_fatal_impl(const char *msg) {
+    fprintf(stderr, "FATAL ERROR:\n%s\n", msg);
+    fflush(stderr);
+    exit(EXIT_FAILURE);
+}
+#elif defined(_WIN32)
 
 static bool sys_windows_pathname_is_portable(const wchar_t *name, size_t size)
 {

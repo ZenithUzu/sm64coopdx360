@@ -44,20 +44,33 @@ void djui_panel_controls_create(struct DjuiBase* caller) {
 
         djui_checkbox_create(body, DLANG(CONTROLS, EXTENDED_REPORTS), &configExtendedReports, NULL);
 
+#if defined(__XSDK__)
+        int numJoys = 0;
+        SDL_JoystickID *padIds = SDL_GetGamepads(&numJoys);
+        const int connectedPads = numJoys;
+#else
         int numJoys = SDL_NumJoysticks();
+#endif
         if (numJoys == 0) { numJoys = 1; }
 
         char** gamepadChoices = calloc(numJoys, sizeof(char *));
 
         // Get the names of all connected gamepads, if none is provided, use "Unknown"
         for (int i = 0; i < numJoys; i++) {
+#if defined(__XSDK__)
+            const char *joystickName = i < connectedPads ? SDL_GetGamepadNameForID(padIds[i]) : NULL;
+#else
             const char* joystickName = SDL_JoystickNameForIndex(i);
+#endif
             if (joystickName == NULL) {
                 joystickName = "Unknown";
             }
             gamepadChoices[i] = strdup(joystickName);
         }
 
+#if defined(__XSDK__)
+        SDL_free(padIds);
+#endif
         // Check for repeated names and append a number if necessary
         for (int i = 0; i < numJoys; i++) {
             int count = 1;

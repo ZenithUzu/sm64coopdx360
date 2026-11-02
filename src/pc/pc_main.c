@@ -68,7 +68,14 @@
 #include <windows.h>
 #endif
 
+#if defined(__XSDK__)
+#include <SDL3/SDL.h>
+#include <xsdk/log.h>
+#define PORT_TRACE(...) xsdk_log_write(__VA_ARGS__)
+#else
 #include <SDL2/SDL.h>
+#define PORT_TRACE(...) ((void)0)
+#endif
 
 extern Vp gViewportFullscreen;
 
@@ -198,6 +205,9 @@ static s32 get_num_frames_to_draw(f64 t, u32 frameLimit) {
 }
 
 static u32 get_display_refresh_rate(void) {
+#if defined(__XSDK__)
+    return 60; // xSDK presentation currently uses a 60 Hz vblank contract.
+#else
     static u32 refreshRate = 0;
     if (!refreshRate) {
         SDL_DisplayMode mode;
@@ -208,6 +218,7 @@ static u32 get_display_refresh_rate(void) {
         }
     }
     return refreshRate;
+#endif
 }
 
 static u32 get_target_refresh_rate(void) {
@@ -221,6 +232,11 @@ static void select_graphics_backend(void) {
         return;
     }
 
+#if defined(__XSDK__)
+    gWindowApi = &gfx_xsdk;
+    gRenderApi = &gfx_xenos_api;
+    gAudioApi = &audio_sdl3;
+#else
 #if defined(_WIN32)
     if (configGraphicsBackend == GAPI_GL && !gfx_sdl_check_opengl_compatibility()) {
         configGraphicsBackend = GAPI_D3D11;
@@ -250,6 +266,8 @@ static void select_graphics_backend(void) {
             gAudioApi  = &audio_sdl;
             break;
     }
+
+#endif
 
     if (!gAudioApi->init()) {
         gAudioApi = &audio_null;
@@ -374,26 +392,67 @@ void *audio_thread(UNUSED void *arg) {
     }
 
     // Exit the thread if our loop breaks.
+#if !defined(__XSDK__)
     exit_thread();
+#endif
+    // Returning lets xSDK's pthread trampoline release TLS and notify joiners.
 
     return NULL;
 }
 
 void produce_one_frame(void) {
+    static unsigned portFrame;
+    unsigned frame = portFrame++;
+#if defined(__XSDK__)
+    static double lastHeartbeat;
+    double now = gWindowApi->get_time();
+    if (now - lastHeartbeat >= 5.0) {
+        PORT_TRACE("heartbeat: frame %u time %.3f audio queued %d", frame, now, gAudioApi ? gAudioApi->buffered() : -1);
+        lastHeartbeat = now;
+    }
+#endif
+#if defined(__XSDK__)
+    static double cpuLogic, cpuAudio, cpuRender, profileLast;
+    static unsigned profileFrames;
+    double profileStart = gWindowApi->get_time();
+#endif
+    const bool trace = frame < 3;
+    if (trace) PORT_TRACE("frame %u: network begin", frame);
     CTX_EXTENT(CTX_NETWORK, network_update);
+    if (trace) PORT_TRACE("frame %u: network end / interpolation begin", frame);
 
     CTX_EXTENT(CTX_INTERP, patch_interpolations_before);
+    if (trace) PORT_TRACE("frame %u: interpolation end / game logic begin", frame);
 
     CTX_EXTENT(CTX_GAME_LOOP, game_loop_one_iteration);
+    if (trace) PORT_TRACE("frame %u: game logic end / Lua begin", frame);
 
     CTX_EXTENT(CTX_SMLUA, smlua_update);
+    if (trace) PORT_TRACE("frame %u: Lua end / audio begin", frame);
 
+#if defined(__XSDK__)
+    double logicEnd = gWindowApi->get_time();
+#endif
     // If we aren't threaded
     if (gAudioThread.state == INVALID) {
         CTX_EXTENT(CTX_AUDIO, buffer_audio);
+    if (trace) PORT_TRACE("frame %u: audio end", frame);
     }
 
+#if defined(__XSDK__)
+    double audioEnd = gWindowApi->get_time();
+#endif
     CTX_EXTENT(CTX_RENDER, produce_interpolation_frames_and_delay);
+#if defined(__XSDK__)
+    double renderEnd = gWindowApi->get_time();
+    cpuLogic += logicEnd-profileStart; cpuAudio += audioEnd-logicEnd; cpuRender += renderEnd-audioEnd;
+    ++profileFrames;
+    if (renderEnd-profileLast >= 5.0) {
+        PORT_TRACE("frame profile: n %u logic_ms %.2f audio_ms %.2f render_ms %.2f", profileFrames, cpuLogic*1000/profileFrames, cpuAudio*1000/profileFrames, cpuRender*1000/profileFrames);
+        profileFrames=0; cpuLogic=cpuAudio=cpuRender=0; profileLast=renderEnd;
+    }
+#endif
+    if (trace) PORT_TRACE("frame %u: render end", frame);
 }
 
 // used for rendering 2D scenes fullscreen like the loading or crash screens
@@ -481,7 +540,9 @@ void* main_game_init(UNUSED void* dummy) {
     }
 
     LOADING_SCREEN_MUTEX(loading_screen_set_segment_text("Loading ROM Assets"));
+    PORT_TRACE("startup: before rom_assets_load();");
     rom_assets_load();
+    PORT_TRACE("startup: after rom_assets_load();");
     smlua_text_utils_init();
 
     mods_init();
@@ -491,8 +552,12 @@ void* main_game_init(UNUSED void* dummy) {
         loading_screen_set_segment_text("Starting Game");
     );
 
+    PORT_TRACE("startup: before audio_init();");
     audio_init();
+    PORT_TRACE("startup: after audio_init();");
+    PORT_TRACE("startup: before sound_init();");
     sound_init();
+    PORT_TRACE("startup: after sound_init();");
     network_player_init();
     mumble_init();
 
@@ -564,7 +629,9 @@ int main(int argc, char *argv[]) {
     }
 
     // initialize sm64 data and controllers
+    PORT_TRACE("startup: before thread5_game_loop(NULL);");
     thread5_game_loop(NULL);
+    PORT_TRACE("startup: after thread5_game_loop(NULL);");
 
     // Initialize the audio thread if possible.
     // init_thread_handle(&gAudioThread, audio_thread, NULL, NULL, 0);
@@ -572,9 +639,15 @@ int main(int argc, char *argv[]) {
     loading_screen_reset();
 
     // initialize djui
+    PORT_TRACE("startup: before djui_init();");
     djui_init();
+    PORT_TRACE("startup: after djui_init();");
+    PORT_TRACE("startup: before djui_unicode_init();");
     djui_unicode_init();
+    PORT_TRACE("startup: after djui_unicode_init();");
+    PORT_TRACE("startup: before djui_init_late();");
     djui_init_late();
+    PORT_TRACE("startup: after djui_init_late();");
     djui_console_message_dequeue();
 
     show_update_popup();
@@ -607,9 +680,12 @@ int main(int argc, char *argv[]) {
         extern void djui_panel_do_host(bool reconnecting, bool playSound);
         djui_panel_do_host(NULL, false);
     } else {
-        network_init(NT_NONE, false);
+        PORT_TRACE("startup: before network_init(NT_NONE, false);");
+    network_init(NT_NONE, false);
+    PORT_TRACE("startup: after network_init(NT_NONE, false);");
     }
 
+    PORT_TRACE("startup: main loop reached, scaled game target with native Guide fix 12");
     // main loop
     while (true) {
         debug_context_reset();

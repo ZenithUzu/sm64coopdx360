@@ -1,3 +1,7 @@
+#if defined(__XSDK__)
+#include "mumble.h"
+void mumble_init(void) {} void mumble_update(void) {}
+#else
 // adapted from https://www.mumble.info/documentation/developer/positional-audio/link-plugin/
 
 #include "mumble.h"
@@ -196,3 +200,5 @@ bool should_update_context() {
 
 	return true;
 }
+
+#endif

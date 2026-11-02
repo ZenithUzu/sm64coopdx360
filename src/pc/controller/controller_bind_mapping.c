@@ -1,5 +1,9 @@
 #include <stdio.h>
+#if defined(__XSDK__)
+#include <SDL3/SDL.h>
+#else
 #include <SDL2/SDL.h>
+#endif
 
 #include "controller_bind_mapping.h"
 #include "controller_api.h"
@@ -142,7 +146,11 @@ const char* translate_bind_to_name(int bind) {
     if (sc == 0) { return name; }
 
     const char* sc_name = SDL_GetScancodeName(sc);
-    SDL_Keycode kc = SDL_GetKeyFromScancode(sc);
+    SDL_Keycode kc = SDL_GetKeyFromScancode(sc
+#if defined(__XSDK__)
+        , SDL_KMOD_NONE, false
+#endif
+    );
     if (kc != 0) {
         const char* kc_name = SDL_GetKeyName(kc);
         if ((*kc_name & 0x80) == 0) { sc_name = kc_name; }

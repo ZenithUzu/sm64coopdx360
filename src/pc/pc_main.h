@@ -7,11 +7,17 @@ extern "C" {
 
 #include "gfx/gfx_pc.h"
 
+#if defined(__XSDK__)
+#include "gfx/gfx_xsdk.h"
+#include "gfx/gfx_xenos.h"
+#include "audio/audio_sdl3.h"
+#else
 #include "gfx/gfx_opengl.h"
 #include "gfx/gfx_direct3d11.h"
 
 #include "gfx/gfx_dxgi.h"
 #include "gfx/gfx_sdl.h"
+#endif
 #include "gfx/gfx_dummy.h"
 
 #include "audio/audio_api.h"

@@ -8,6 +8,11 @@ import subprocess
 import sys
 import zlib
 
+OUTPUT_ROOT = None
+
+def output_path(path):
+    return os.path.join(OUTPUT_ROOT, path) if OUTPUT_ROOT else path
+
 TYPE_CTL = 1
 TYPE_TBL = 2
 TYPE_SEQ = 3
@@ -753,26 +758,26 @@ def serialize_seqfile(
         compress = False
 
         if out_filename.endswith('sound_data.tbl'):
-            out_offsets_filename = 'sound/samples_offsets.h'
+            out_offsets_filename = output_path('sound/samples_offsets.h')
             with open(out_offsets_filename, "w") as f:
                 for fname in asset_offsets:
-                    macro_name = 'SAMPLE_' + fname.split('/samples/')[-1].replace('/', '_').replace('.', '_').replace('-', '_')
+                    macro_name = 'SAMPLE_' + fname.replace(chr(92), '/').split('/samples/')[-1].replace('/', '_').replace('.', '_').replace('-', '_')
                     f.write(f'#define {macro_name} {hex(asset_offsets[fname] + data_start)} // {fname}\n')
-            out_filename = 'sound/sound_data_compressed.tbl'
+            out_filename = output_path('sound/sound_data_compressed.tbl')
             compress = True
 
         if out_filename.endswith('sequences.bin'):
-            out_offsets_filename = 'sound/sequences_offsets.h'
+            out_offsets_filename = output_path('sound/sequences_offsets.h')
             with open(out_offsets_filename, "w") as f:
                 for fname in asset_offsets:
-                    macro_name = 'SEQUENCE_' + fname.split('/sequences/')[-1].replace('/', '_').replace('.', '_').replace('-', '_')
+                    macro_name = 'SEQUENCE_' + fname.replace(chr(92), '/').split('/sequences/')[-1].replace('/', '_').replace('.', '_').replace('-', '_')
                     f.write(f'#define {macro_name} {hex(asset_offsets[fname] + data_start)} // {fname}\n')
             data = data[:entry_offsets[1] + data_start] # remove the fake data
-            out_filename = 'sound/sequences_compressed.bin'
+            out_filename = output_path('sound/sequences_compressed.bin')
             compress = True
 
         if out_filename.endswith('sound_data.ctl'):
-            out_filename = 'sound/sound_data_compressed.ctl'
+            out_filename = output_path('sound/sound_data_compressed.ctl')
             compress = True
 
         with open(out_filename, "wb") as f:
@@ -916,7 +921,7 @@ def write_sequences(
     )
 
     compress = True
-    out_bank_sets = 'sound/bank_sets_compressed'
+    out_bank_sets = output_path('sound/bank_sets_compressed')
     with open(out_bank_sets, "wb") as f:
         ser = ReserveSerializer()
         table = ser.reserve(len(ind_to_name) * 2)
@@ -936,6 +941,7 @@ def write_sequences(
 def main():
     global STACK_TRACES
     global DUMP_INDIVIDUAL_BINS
+    global OUTPUT_ROOT
     global ENDIAN_MARKER
     global WORD_BYTES
     need_help = False
@@ -952,6 +958,10 @@ def main():
             continue
         if a == "--help" or a == "-h":
             need_help = True
+        elif a == "--output-dir":
+            OUTPUT_ROOT = sys.argv[i + 1]
+            os.makedirs(os.path.join(OUTPUT_ROOT, 'sound'), exist_ok=True)
+            skip_next = 1
         elif a == "--cpp":
             cpp_command = sys.argv[i + 1]
             skip_next = 1

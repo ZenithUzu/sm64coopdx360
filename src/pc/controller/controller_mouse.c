@@ -1,3 +1,17 @@
+#if defined(__XSDK__)
+#include "controller_mouse.h"
+#include "platform/xsdk/input_usb.h"
+bool mouse_init_ok, mouse_relative_enabled;
+u32 mouse_buttons, mouse_window_buttons, mouse_window_buttons_pressed, mouse_window_buttons_released;
+s32 mouse_x, mouse_y, mouse_window_x, mouse_window_y;
+u32 mouse_scroll_timestamp;
+f32 mouse_scroll_x, mouse_scroll_y;
+void controller_mouse_read_window(void) { xsdk_usb_mouse_window(); }
+void controller_mouse_read_relative(void) { xsdk_usb_mouse_relative(); }
+void controller_mouse_enter_relative(void) { mouse_relative_enabled = true; }
+void controller_mouse_leave_relative(void) { mouse_relative_enabled = false; }
+void mouse_on_scroll(float x, float y) { (void)x; (void)y; }
+#else
 #include "controller_mouse.h"
 #include "pc/gfx/gfx_pc.h"
 #include "pc/djui/djui.h"
@@ -187,3 +201,4 @@ void mouse_on_scroll(float x, float y) {
     mouse_scroll_x += x;
     mouse_scroll_y += y;
 }
+#endif /* __XSDK__ */

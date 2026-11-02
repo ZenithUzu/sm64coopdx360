@@ -1,0 +1,25 @@
+name: Source checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  sources:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Audit publication tree
+        run: python3 tools/verify_public_tree.py
+      - name: Check host Python syntax
+        run: python3 -m compileall -q platform/xsdk tools/verify_public_tree.py
+      - name: Test numeric combiner command order
+        run: |
+          cc -std=c99 -Wall -Wextra -Werror -Isrc/pc/gfx platform/xsdk/tests/combiner_test.c -o /tmp/combiner_test
+          /tmp/combiner_test
+      - name: Test level command field widths
+        run: |
+          cc -std=c99 -Wall -Wextra -Werror -D_LANGUAGE_C -DF3DEX_GBI_2E -Iinclude -I. platform/xsdk/tests/level_script_read_test.c -o /tmp/level_script_test
+          /tmp/level_script_test

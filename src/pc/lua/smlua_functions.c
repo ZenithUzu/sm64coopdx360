@@ -11,6 +11,7 @@
 #include "audio/external.h"
 #include "object_fields.h"
 #include "level_commands.h"
+#include "level_script_read.h"
 #include "engine/math_util.h"
 #include "engine/level_script.h"
 #include "pc/djui/djui_hud_utils.h"
@@ -490,8 +491,11 @@ struct LuaLevelScriptParse {
 
 struct LuaLevelScriptParse sLevelScriptParse = { 0 };
 
-static bool smlua_func_level_find_lua_param(u64 *param, void *cmd, u32 offset, u32 luaParams, u32 luaParamFlag) {
-    *param = dynos_level_cmd_get(cmd, offset);
+static bool smlua_func_level_find_lua_param(u64 *param, void *cmd, u32 offset, u32 luaParams, u32 luaParamFlag, u8 type, size_t bytes) {
+    // Extended Lua fields/tokens occupy complete pointer-sized slots.
+    if (type == 0x43 || (luaParams & luaParamFlag)) bytes = sizeof(uintptr_t);
+    else if (type == 0x3F && luaParamFlag == OBJECT_EXT_LUA_MODEL) bytes = 1;
+    *param = level_script_read_field(cmd, offset, bytes);
     if (luaParams & luaParamFlag) {
         const char *paramStr = dynos_level_get_token(*param);
         gSmLuaConvertSuccess = true;
@@ -509,7 +513,7 @@ static bool smlua_func_level_find_lua_param(u64 *param, void *cmd, u32 offset, u
 
 #define smlua_func_level_get_lua_param(name, ptype, flag) \
     u64 name##Param; \
-    if (!smlua_func_level_find_lua_param(&name##Param, cmd, flag##_OFFSET(type), luaParams, flag)) { \
+    if (!smlua_func_level_find_lua_param(&name##Param, cmd, flag##_OFFSET(type), luaParams, flag, type, sizeof(ptype))) { \
         break; \
     } \
     ptype name = (ptype) name##Param;
@@ -526,26 +530,26 @@ s32 smlua_func_level_script_parse_callback(u8 type, void *cmd) {
 
         // AREA
         case 0x1F: {
-            areaIndex = dynos_level_cmd_get(cmd, 2);
+            areaIndex = (u32)level_script_read_field(cmd, 2, 1);
             area = true;
         } break;
 
         // OBJECT, OBJECT_WITH_ACTS
         case 0x24: {
-            const BehaviorScript *bhvPtr = (const BehaviorScript *) dynos_level_cmd_get(cmd, 20);
+            const BehaviorScript *bhvPtr = (const BehaviorScript *) level_script_read_pointer(cmd, 20);
             if (bhvPtr) {
                 bhvId = get_id_from_behavior(bhvPtr);
                 if (bhvId == id_bhv_max_count) {
                     bhvId = get_id_from_vanilla_behavior(bhvPtr); // for behaviors with no id in the script (e.g. bhvInstantActiveWarp)
                 }
-                bhvArgs = dynos_level_cmd_get(cmd, 16);
-                bhvModelId = dynos_level_cmd_get(cmd, 3);
-                bhvPosX = dynos_level_cmd_get(cmd, 4);
-                bhvPosY = dynos_level_cmd_get(cmd, 6);
-                bhvPosZ = dynos_level_cmd_get(cmd, 8);
-                bhvPitch = (dynos_level_cmd_get(cmd, 10) * 0x8000) / 180;
-                bhvYaw   = (dynos_level_cmd_get(cmd, 12) * 0x8000) / 180;
-                bhvRoll  = (dynos_level_cmd_get(cmd, 14) * 0x8000) / 180;
+                bhvArgs = (u32)level_script_read_field(cmd, 16, 4);
+                bhvModelId = (u32)level_script_read_field(cmd, 3, 1);
+                bhvPosX = (s16)level_script_read_field(cmd, 4, 2);
+                bhvPosY = (s16)level_script_read_field(cmd, 6, 2);
+                bhvPosZ = (s16)level_script_read_field(cmd, 8, 2);
+                bhvPitch = ((s16)level_script_read_field(cmd, 10, 2) * 0x8000) / 180;
+                bhvYaw   = ((s16)level_script_read_field(cmd, 12, 2) * 0x8000) / 180;
+                bhvRoll  = ((s16)level_script_read_field(cmd, 14, 2) * 0x8000) / 180;
                 bhv = true;
             }
         } break;
@@ -560,7 +564,7 @@ s32 smlua_func_level_script_parse_callback(u8 type, void *cmd) {
                 u16 luaParams = (
                     type == 0x3F ? OBJECT_EXT_LUA_BEHAVIOR : (
                     type == 0x40 ? OBJECT_EXT_LUA_BEHAVIOR | OBJECT_EXT_LUA_MODEL : (
-                    dynos_level_cmd_get(cmd, 2)
+                    level_script_read_field(cmd, 2, 2)
                 )));
 
                 smlua_func_level_get_lua_param(modelId, u32, OBJECT_EXT_LUA_MODEL);
@@ -596,7 +600,7 @@ s32 smlua_func_level_script_parse_callback(u8 type, void *cmd) {
 
         // MACRO_OBJECTS
         case 0x39: {
-            macroData = (MacroObject *) dynos_level_cmd_get(cmd, 4);
+            macroData = (MacroObject *) level_script_read_pointer(cmd, 4);
         } break;
 
         // None of the above

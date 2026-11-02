@@ -4,8 +4,25 @@
 #include "pc/debuglog.h"
 #include "pc/djui/djui.h"
 
+#if defined(__XSDK__)
+typedef struct sockaddr_in CoopSocketAddress;
+#define COOP_SOCKET_AF AF_INET
+#define COOP_SOCKET_IP sin_addr
+#define COOP_SOCKET_FAMILY sin_family
+#define COOP_SOCKET_PORT sin_port
+#define COOP_SOCKET_TEXT_LENGTH INET_ADDRSTRLEN
+#define COOP_SOCKET_ANY ((struct in_addr){ .s_addr = INADDR_ANY })
+#else
+typedef struct sockaddr_in6 CoopSocketAddress;
+#define COOP_SOCKET_AF AF_INET6
+#define COOP_SOCKET_IP sin6_addr
+#define COOP_SOCKET_FAMILY sin6_family
+#define COOP_SOCKET_PORT sin6_port
+#define COOP_SOCKET_TEXT_LENGTH INET6_ADDRSTRLEN
+#define COOP_SOCKET_ANY in6addr_any
+#endif
 static SOCKET sCurSocket = INVALID_SOCKET;
-static struct sockaddr_in6 sAddr[MAX_PLAYERS] = { 0 };
+static CoopSocketAddress sAddr[MAX_PLAYERS] = { 0 };
 struct addrinfo hints;
 struct addrinfo *result, *i;
 
@@ -14,7 +31,18 @@ char gGetHostName[MAX_CONFIG_STRING] = "";
 // Resolves a hostname to an IP address. Current limitation: It still only gets the first address it sees and returns.
 // getaddrinfo() is smart enough to prioritize IPv4 if the user is not in an IPv6 enabled network, so this shouldn't be a problem for now.
 // TODO: Store all found addresses somewhere and make the game try to connect to each of them if one fails.
-void resolve_domain(struct sockaddr_in6 *addr) {
+#if defined(__XSDK__)
+static bool resolve_domain(CoopSocketAddress *addr) {
+    struct addrinfo hint = {0}, *addresses = NULL;
+    hint.ai_family = AF_INET; hint.ai_socktype = SOCK_DGRAM;
+    int error = getaddrinfo(configJoinIp, NULL, &hint, &addresses);
+    if (error || !addresses) { LOG_ERROR("IPv4 DNS lookup failed: %d", error); return false; }
+    addr->sin_addr = ((struct sockaddr_in *)addresses->ai_addr)->sin_addr;
+    freeaddrinfo(addresses);
+    return true;
+}
+#else
+void resolve_domain(CoopSocketAddress *addr) {
     // non zero value if getaddrinfo throws an error.
     int error;
 
@@ -43,14 +71,14 @@ void resolve_domain(struct sockaddr_in6 *addr) {
         // Iterate through results
         for (i = result; i != NULL; i = i->ai_next) {
             // buffer for IPv6 address
-            char str[INET6_ADDRSTRLEN];
+            char str[COOP_SOCKET_TEXT_LENGTH];
             // IPv6 address:
-            if (i->ai_addr->sa_family == AF_INET6) {
-                struct sockaddr_in6 *p = (struct sockaddr_in6 *)i->ai_addr;
+            if (i->ai_addr->sa_family == COOP_SOCKET_AF) {
+                CoopSocketAddress *p = (CoopSocketAddress *)i->ai_addr;
                 // copy address to sockaddr_in6 struct
-                memcpy(&addr->sin6_addr, &p->sin6_addr, sizeof(struct in6_addr));
+                memcpy(&addr->COOP_SOCKET_IP, &p->COOP_SOCKET_IP, sizeof(struct in6_addr));
                 // set new join IP for config file
-                snprintf(configJoinIp, MAX_CONFIG_STRING, "%s", inet_ntop(AF_INET6, &p->sin6_addr, str, sizeof(str)));
+                snprintf(configJoinIp, MAX_CONFIG_STRING, "%s", inet_ntop(COOP_SOCKET_AF, &p->COOP_SOCKET_IP, str, sizeof(str)));
                 // Free results from memory and return
                 freeaddrinfo(result);
                 return;
@@ -66,10 +94,10 @@ void resolve_domain(struct sockaddr_in6 *addr) {
                 // then copy the IPv4 address to the end of the IPv6 address. The address is now properly formed.
                 memcpy(&ipv6_mapped_addr.s6_addr[12], &p->sin_addr, sizeof(p->sin_addr));
                 // copy address to sockaddr_in6 struct
-                memcpy(&addr->sin6_addr, &ipv6_mapped_addr, sizeof(struct in6_addr));
+                memcpy(&addr->COOP_SOCKET_IP, &ipv6_mapped_addr, sizeof(struct in6_addr));
 
                 // set new join IP for config file
-                snprintf(configJoinIp, MAX_CONFIG_STRING, "%s", inet_ntop(AF_INET6, &ipv6_mapped_addr, str, sizeof(str)));
+                snprintf(configJoinIp, MAX_CONFIG_STRING, "%s", inet_ntop(COOP_SOCKET_AF, &ipv6_mapped_addr, str, sizeof(str)));
                 // Free results from memory and return
                 freeaddrinfo(result);
                 return;
@@ -80,13 +108,15 @@ void resolve_domain(struct sockaddr_in6 *addr) {
     }
 }
 
+#endif
+
 static int socket_bind(SOCKET socket, unsigned int port) {
-    struct sockaddr_in6 rxAddr;
+    CoopSocketAddress rxAddr;
     // Clean struct to prevent rare cases of binding errors due to garbage data in that memory location. This just happened to me randomly on Windows and left me very confused.
-    memset(&rxAddr, 0, sizeof(struct sockaddr_in6));
-    rxAddr.sin6_family = AF_INET6;
-    rxAddr.sin6_port = htons(port);
-    rxAddr.sin6_addr = in6addr_any;
+    memset(&rxAddr, 0, sizeof(CoopSocketAddress));
+    rxAddr.COOP_SOCKET_FAMILY = COOP_SOCKET_AF;
+    rxAddr.COOP_SOCKET_PORT = htons(port);
+    rxAddr.COOP_SOCKET_IP = COOP_SOCKET_ANY;
 
     int rc = bind(socket, (SOCKADDR *)&rxAddr, sizeof(rxAddr));
 
@@ -97,8 +127,8 @@ static int socket_bind(SOCKET socket, unsigned int port) {
     return rc;
 }
 
-static int socket_send(SOCKET socket, struct sockaddr_in6* addr, u8* buffer, u16 bufferLength) {
-    int addrSize = sizeof(struct sockaddr_in6);
+static int socket_send(SOCKET socket, CoopSocketAddress* addr, u8* buffer, u16 bufferLength) {
+    int addrSize = sizeof(CoopSocketAddress);
     int rc = sendto(socket, (char*)buffer, bufferLength, 0, (struct sockaddr*)addr, addrSize);
     if (rc != SOCKET_ERROR) { return NO_ERROR; }
 
@@ -109,14 +139,14 @@ static int socket_send(SOCKET socket, struct sockaddr_in6* addr, u8* buffer, u16
     return rc;
 }
 
-static int socket_receive(SOCKET socket, struct sockaddr_in6* rxAddr, u8* buffer, u16 bufferLength, u16* receiveLength, u8* localIndex) {
+static int socket_receive(SOCKET socket, CoopSocketAddress* rxAddr, u8* buffer, u16 bufferLength, u16* receiveLength, u8* localIndex) {
     *receiveLength = 0;
 
-    RX_ADDR_SIZE_TYPE rxAddrSize = sizeof(struct sockaddr_in6);
+    RX_ADDR_SIZE_TYPE rxAddrSize = sizeof(CoopSocketAddress);
     int rc = recvfrom(socket, (char*)buffer, bufferLength, 0, (struct sockaddr*)rxAddr, &rxAddrSize);
 
     for (int i = 1; i < MAX_PLAYERS; i++) {
-        if (memcmp(rxAddr, &sAddr[i], sizeof(struct sockaddr_in6)) == 0) {
+        if (memcmp(rxAddr, &sAddr[i], sizeof(CoopSocketAddress)) == 0) {
             *localIndex = i;
             break;
         }
@@ -163,15 +193,19 @@ static bool ns_socket_initialize(enum NetworkType networkType, UNUSED bool recon
         }
         LOG_INFO("bound to port %u", port);
     } else if (networkType == NT_CLIENT) {
-        struct sockaddr_in6 addr;
+        CoopSocketAddress addr;
         // set and clean struct to prevent garbage data
-        memset(&addr, 0, sizeof(struct sockaddr_in6));
+        memset(&addr, 0, sizeof(CoopSocketAddress));
         // save the port to send to
-        sAddr[0].sin6_family = AF_INET6;
-        sAddr[0].sin6_port = htons(port);
+        sAddr[0].COOP_SOCKET_FAMILY = COOP_SOCKET_AF;
+        sAddr[0].COOP_SOCKET_PORT = htons(port);
         // resolve and get address list to connect
+#if defined(__XSDK__)
+        if (!resolve_domain(&addr)) { socket_shutdown(sCurSocket); sCurSocket = INVALID_SOCKET; return false; }
+#else
         resolve_domain(&addr);
-        sAddr[0].sin6_addr = addr.sin6_addr;
+#endif
+        sAddr[0].COOP_SOCKET_IP = addr.COOP_SOCKET_IP;
         LOG_INFO("connecting to %s, port %u", configJoinIp, port);
         // copy hostname to be saved to config file
         snprintf(configJoinIp, MAX_CONFIG_STRING, "%s", gGetHostName);
@@ -200,8 +234,8 @@ static s64 ns_socket_get_id(UNUSED u8 localId) {
 
 static char* ns_socket_get_id_str(u8 localId) {
     if (localId == UNKNOWN_LOCAL_INDEX) { localId = 0; }
-    static char id_str[INET6_ADDRSTRLEN] = { 0 };
-    inet_ntop(AF_INET6, &sAddr[localId].sin6_addr, id_str, sizeof(id_str));
+    static char id_str[COOP_SOCKET_TEXT_LENGTH] = { 0 };
+    inet_ntop(COOP_SOCKET_AF, &sAddr[localId].COOP_SOCKET_IP, id_str, sizeof(id_str));
     return id_str;
 }
 
@@ -215,18 +249,18 @@ static void ns_socket_save_id(u8 localId, UNUSED s64 networkId) {
 static void ns_socket_clear_id(u8 localId) {
     if (localId == 0) { return; }
     SOFT_ASSERT(localId < MAX_PLAYERS);
-    memset(&sAddr[localId], 0, sizeof(struct sockaddr_in6));
+    memset(&sAddr[localId], 0, sizeof(CoopSocketAddress));
     LOG_INFO("cleared addr for id %d", localId);
 }
 
 static void* ns_socket_dup_addr(u8 localIndex) {
-    void* address = malloc(sizeof(struct sockaddr_in6));
-    memcpy(address, &sAddr[localIndex], sizeof(struct sockaddr_in6));
+    void* address = malloc(sizeof(CoopSocketAddress));
+    memcpy(address, &sAddr[localIndex], sizeof(CoopSocketAddress));
     return address;
 }
 
 static bool ns_socket_match_addr(void* addr1, void* addr2) {
-    return !memcmp(addr1, addr2, sizeof(struct sockaddr_in6));
+    return !memcmp(addr1, addr2, sizeof(CoopSocketAddress));
 }
 
 static void ns_socket_update(void) {
@@ -249,8 +283,8 @@ static int ns_socket_send(u8 localIndex, void* address, u8* data, u16 dataLength
         if (gNetworkType == NT_CLIENT && gNetworkPlayers[localIndex].type != NPT_SERVER) { return SOCKET_ERROR; }
     }
 
-    struct sockaddr_in6* userAddr = &sAddr[localIndex];
-    if (localIndex == 0 && address != NULL) { userAddr = (struct sockaddr_in6*)address; }
+    CoopSocketAddress* userAddr = &sAddr[localIndex];
+    if (localIndex == 0 && address != NULL) { userAddr = (CoopSocketAddress*)address; }
 
     int rc = socket_send(sCurSocket, userAddr, data, dataLength);
     if (rc) {
@@ -271,7 +305,7 @@ static void ns_socket_shutdown(UNUSED bool reconnecting) {
     socket_shutdown(sCurSocket);
     sCurSocket = INVALID_SOCKET;
     for (u16 i = 0; i < MAX_PLAYERS; i++) {
-        memset(&sAddr[i], 0, sizeof(struct sockaddr_in6));
+        memset(&sAddr[i], 0, sizeof(CoopSocketAddress));
     }
     LOG_INFO("shutdown");
 }

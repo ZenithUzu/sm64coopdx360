@@ -86,6 +86,13 @@ struct CombineMode {
 };
 #pragma pack()
 
+// Combiner words encode a,b,c,d from least to most significant byte.
+// Read the numeric encoding rather than the host's union byte order.
+static inline uint8_t gfx_cc_get_command(const struct CombineMode *cm, unsigned index) {
+    const uint32_t words[4] = { cm->rgb1, cm->alpha1, cm->rgb2, cm->alpha2 };
+    return (uint8_t)(words[index / 4] >> (8 * (index % 4)));
+}
+
 #define SHADER_CMD_LENGTH 16
 #define CC_MAX_SHADERS 64
 

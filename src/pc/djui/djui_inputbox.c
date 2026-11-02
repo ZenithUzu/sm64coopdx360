@@ -1,4 +1,7 @@
 #include <string.h>
+#if defined(__XSDK__)
+#include "platform/xsdk/keyboard_xsdk.h"
+#endif
 #include <stdio.h>
 #include "djui.h"
 #include "djui_unicode.h"
