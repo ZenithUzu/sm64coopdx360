@@ -27,7 +27,7 @@ static XsdkSamplerState scene_sampler;
 static volatile uint32_t *upscale_vertices;
 static XsdkShader material_shaders[MATERIAL_COUNT];
 static bool material_ready[MATERIAL_COUNT];
-static unsigned stat_specialized;
+static unsigned stat_specialized, noise_frame;
 static volatile uint32_t *vertices;
 static size_t vertex_cursor;
 static XsdkTexture retired[64];
@@ -128,6 +128,8 @@ static void begin(void) {
         xsdk_log_write("render stats: draws %u specialized %u uploads %u upload_ms %u waits %u wait_ms %u", stat_draws, stat_specialized, stat_uploads, (unsigned)(stat_upload_ns/1000000), stat_waits, (unsigned)(stat_wait_ns/1000000));
         stat_draws=stat_uploads=stat_waits=stat_specialized=0; stat_upload_ns=stat_wait_ns=0; last=now;
     }
+    // Keep sin() inputs small: the noise only needs to change between frames.
+    noise_frame = (noise_frame + 1) % 150;
     gfx_xsdk.get_dimensions(&width, &height);
     xsdk_gpu_set_target(width, height);
     // XAM may overwrite both color and depth in eDRAM. Discard that content
@@ -194,17 +196,19 @@ static void draw(float data[], size_t count, size_t triangles) {
         built=material->code;pixel=&material_shaders[i];push=material->push;registers=material->registers;
         slots[0]=material->sampler[0];slots[1]=material->sampler[1];++stat_specialized;
     }
-    if(registers>6) fail("material push constants exceed parameter block");
+    if(registers>7) fail("material push constants exceed parameter block");
     xsdk_gpu_set_shaders(&vertex_shader, pixel);
     // Restore alongside each binding; the system UI and resolves also use GPU constants.
     xsdk_built_shader_set_literals(&coopdx_vert);
     xsdk_built_shader_set_literals(built);
-    float constants[24] = {0};
+    float constants[28] = {0};
     for (unsigned j=0; j<16; j++) constants[j]=(float)current->commands[j];
     constants[16]=current->mode.use_2cycle; constants[17]=current->mode.use_alpha;
     constants[18]=current->mode.texture_edge; constants[19]=current->mode.use_fog;
     for (unsigned j=0; j<3; j++) constants[20+j]=gVertexColor[j]/255.0f;
     constants[23]=current->mode.light_map;
+    const bool dither=current->mode.use_alpha && current->mode.use_dither;
+    constants[24]=(float)noise_frame; constants[25]=dither || current->features.do_noise; constants[26]=dither;
     xsdk_gpu_set_pixel_constants(push, constants, registers);
     for (unsigned t=0; t<2; t++) {
         if(slots[t]<0) continue;
@@ -223,7 +227,9 @@ static void draw(float data[], size_t count, size_t triangles) {
     xsdk_gpu_blend_state(&bs, &blend); xsdk_gpu_set_blend(&bs);
     XsdkRaster raster = {0}; XsdkRasterState rs;
     // Xenos takes normalized depth bias; OpenGL takes integer depth-buffer units.
-    raster.depth_bias=decal ? -2.0f / 16777215.0f : 0; raster.depth_bias_slope=decal ? -2 : 0;
+    raster.depth_bias=decal ? -2.0f / 16777215.0f : 0;
+    // The slope term is per pixel: at half resolution, -1 keeps the world-space offset of -2 at 720p.
+    raster.depth_bias_slope=decal ? -1 : 0;
     xsdk_gpu_raster_state(&rs, &raster); xsdk_gpu_set_raster(&rs);
     xsdk_gpu_set_viewport(viewport[0], (float)height-viewport[1]-viewport[3], viewport[2], viewport[3], 0, 1);
     int x=scissor[0], y=(int)height-scissor[1]-scissor[3], w=scissor[2], h=scissor[3];
