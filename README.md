@@ -43,6 +43,10 @@ Port **experimental y no oficial** de [sm64coopdx](https://github.com/coop-delux
 - [SDL3 Xenon](https://github.com/xenosworks/SDL-xenon), compilado para ese xSDK.
 - Tu propia ROM de Super Mario 64 de **EE. UU.**, en formato `.z64`, cuyo SHA1 coincida con `sm64.us.sha1`.
 
+## Compilación desde la interfaz de xSDK
+
+La [receta de proyecto](docs/xbox360/XSDK_RECIPE.md) permite construir las correcciones actuales desde xSDK con interfaz en inglés, español o portugués. Selecciona la raíz del repositorio, tus herramientas y SDL3 Xenon; usa Release. No incluye ROM, assets ni XEX y no garantiza FPS.
+
 ## Instalación
 
 ### 1. Prepara las herramientas

@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "kind": "powershell-port",
+  "name": "SM64CoopDX Xbox 360",
+  "build_script": "platform/xsdk/build.ps1",
+  "requires_sdl3": true,
+  "recommended_build_type": "Release",
+  "profile": "coopdx-xsdk-source",
+  "notes": "Source recipe only. Private ROM/assets and installed xSDK/SDL3 tools required. No console FPS guarantee."
+}

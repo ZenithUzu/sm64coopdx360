@@ -37,10 +37,11 @@ target_link_libraries(coopdx_xsdk_engine PRIVATE coopdx_xsdk_platform)
 
 
 set(COOPDX_PYTHON "C:/msys64/ucrt64/bin/python.exe" CACHE FILEPATH "Host Python")
+set(COOPDX_GLSLANG "${XSDK_TOOLCHAIN}/bin/glslang.exe" CACHE FILEPATH "Host glslang-xenon")
 set(COOPDX_SHADER_HEADER "${CMAKE_CURRENT_BINARY_DIR}/coopdx_shaders.h")
 add_custom_command(OUTPUT "${COOPDX_SHADER_HEADER}"
     COMMAND "${COOPDX_PYTHON}" "${XSDK_ROOT}/tools/build_shaders.py"
-        --glslang "${XSDK_TOOLCHAIN}/bin/glslang.exe" --output "${COOPDX_SHADER_HEADER}"
+        --glslang "${COOPDX_GLSLANG}" --output "${COOPDX_SHADER_HEADER}"
         "${CMAKE_CURRENT_SOURCE_DIR}/shaders/coopdx.vert" "${CMAKE_CURRENT_SOURCE_DIR}/shaders/coopdx.frag"
         "${CMAKE_CURRENT_SOURCE_DIR}/shaders/upscale.vert" "${CMAKE_CURRENT_SOURCE_DIR}/shaders/upscale.frag"
     DEPENDS shaders/coopdx.vert shaders/coopdx.frag shaders/upscale.vert shaders/upscale.frag "${XSDK_ROOT}/tools/build_shaders.py" "${XSDK_ROOT}/build/host/libxsc.dll"
@@ -52,7 +53,7 @@ add_custom_command(OUTPUT "${COOPDX_MATERIAL_HEADER}"
     BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/materials/material_code.h"
     COMMAND "${COOPDX_PYTHON}" "${CMAKE_CURRENT_SOURCE_DIR}/build_material_shaders.py"
         --repo "${COOPDX_ROOT}" --out "${CMAKE_CURRENT_BINARY_DIR}/materials"
-        --xsdk "${XSDK_ROOT}" --glslang "${XSDK_TOOLCHAIN}/bin/glslang.exe"
+        --xsdk "${XSDK_ROOT}" --glslang "${COOPDX_GLSLANG}"
     DEPENDS build_material_shaders.py shaders/coopdx.frag "${COOPDX_ROOT}/src/pc/gfx/gfx_cc.c"
         "${XSDK_ROOT}/tools/build_shaders.py" "${XSDK_ROOT}/build/host/libxsc.dll"
     VERBATIM)
@@ -132,8 +133,3 @@ if(COOPDX_BUILD_GAME)
     add_custom_command(TARGET sm64coopdx POST_BUILD COMMAND "${COOPDX_PYTHON}" "${XSDK_ROOT}/tools/elf2xex.py"
         --title-name "sm64coopdx360" "$<TARGET_FILE:sm64coopdx>" "${CMAKE_CURRENT_BINARY_DIR}/sm64coopdx.xex" VERBATIM)
 endif()
-
-
-
-
-
