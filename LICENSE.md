@@ -10,7 +10,10 @@ The original implementation in the following newly introduced files is offered u
 - `include/level_script_read.h`;
 - `src/pc/audio/audio_sdl3.c` and `.h`;
 - `src/pc/controller/controller_xsdk.c` and `.h`;
-- `src/pc/gfx/gfx_xsdk.c`, `.h`, `gfx_xenos.c` and `.h`;
+- `src/pc/gfx/gfx_xsdk.c`, `.h`, `gfx_xenos.c`, `.h` and `gfx_xsdk_lut.h`;
+- `src/pc/network/packets/packet_wire.h` and `packet_safe_path.h`;
+- `data/dynos_cmd_order.h` and `data/dynos_tex_shrink.h`;
+- `xsdk-project.json`;
 - new Xbox 360 documentation and `tools/verify_public_tree.py`.
 
 This grant covers only original contributions in those files, not included headers, libraries, inherited snippets, generated game data, trademarks or other third-party material. MIT does not override any applicable upstream terms.
@@ -21,6 +24,6 @@ The sm64coopdx / sm64ex-coop / sm64-port / n64decomp portions retain their prove
 
 ## Dependencies and excluded material
 
-Lua, zlib and other third-party components retain their own notices: see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). ROMs, game assets, proprietary SDKs and reference executables are not granted a license by this repository and are excluded from the current publication tree. Earlier fork history is not rewritten by this change.
+Lua, zlib, CoopNet (AGPL-3.0), libjuice (MPL-2.0) and other third-party components retain their own licenses: see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The game build links CoopNet, so anyone distributing a compiled game must also meet the AGPL-3.0 for that work. ROMs, game assets, proprietary SDKs and reference executables are not granted a license by this repository and are excluded from the current publication tree. Earlier fork history is not rewritten by this change.
 
 No whole-repository “MIT”, GPL or public-domain claim is made. This document clarifies scope; it does not certify legal compliance or guarantee that a rights holder will not make a claim.

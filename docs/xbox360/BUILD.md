@@ -16,7 +16,7 @@ La guía de instalación completa, con los archivos que van en la consola, está
 
 ## Rutas y comandos
 
-Los valores predeterminados del script son `C:\xsdk-windows`, `C:\xsdk-tools\compiler`, `C:\SDL-xenon\build-xsdk` y herramientas anfitrión en `C:\msys64`. Las tres primeras rutas se pueden cambiar mediante `-XsdkRoot`, `-Toolchain` y `-SdlBuild`. Las rutas de las herramientas MSYS2 aún están fijadas en el script y CMakeLists; revisarlas si tu instalación difiere.
+Los valores predeterminados del script son `C:\xsdk-windows`, `C:\xsdk-tools\compiler`, `C:\SDL-xenon\build-xsdk` y `C:\msys64`. Se cambian con `-XsdkRoot`, `-Toolchain`, `-SdlBuild` y `-MsysRoot`. También acepta `-Glslang`, `-Jobs`, `-BuildType` (Release por defecto) y `-RestoreInheritedInputs`. La interfaz de xSDK ejecuta este mismo script mediante [la receta](XSDK_RECIPE.md).
 
 ```powershell
 .\platform\xsdk\build.ps1 -Game `
@@ -33,7 +33,9 @@ Reconstrucción incremental:
 if ($LASTEXITCODE -ne 0) { throw 'Build fallido' }
 ```
 
-Resultados privados: `sm64coopdx` (ELF) y `sm64coopdx.xex`. Guardar ambos juntos para simbolizar crashes; no publicarlos desde este fork. Evitar el antiguo Makefile de escritorio para este destino. Los binarios de dependencias de escritorio también se retiraron del árbol público.
+Tras actualizar xSDK, reconstruye SDL3 Xenon y haz una compilación limpia del juego. Comprobar la receta no valida la compatibilidad entre versiones.
+
+Resultados privados: `sm64coopdx` (ELF), `sm64coopdx.xex` y `build-info.json`, con la configuración, el commit y los SHA256. Guardar ELF y XEX juntos para simbolizar crashes; no publicarlos desde este fork. Evitar el antiguo Makefile de escritorio para este destino. Los binarios de dependencias de escritorio también se retiraron del árbol público.
 
 ## Archivos excluidos
 

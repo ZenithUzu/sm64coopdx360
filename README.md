@@ -37,15 +37,11 @@ Port **experimental y no oficial** de [sm64coopdx](https://github.com/coop-delux
 
 **PC con Windows de 64 bits**
 
-- [MSYS2](https://www.msys2.org/) en `C:\msys64`, con UCRT64: CMake, Ninja, Python, GCC y Make.
-- [Git](https://git-scm.com/).
-- [xSDK para Windows](https://github.com/ZenithUzu/xsdk) y su compilador `powerpc-xsdk-elf`.
+- [MSYS2](https://www.msys2.org/) con UCRT64: CMake, Ninja, Python, GCC y Make. Por defecto en `C:\msys64`.
+- [Git](https://git-scm.com/) y Python 3.11 o posterior con tkinter, para la interfaz de xSDK.
+- [xSDK para Windows](https://github.com/ZenithUzu/xsdk), con su interfaz en inglés, español o portugués, y su compilador `powerpc-xsdk-elf`.
 - [SDL3 Xenon](https://github.com/xenosworks/SDL-xenon), compilado para ese xSDK.
 - Tu propia ROM de Super Mario 64 de **EE. UU.**, en formato `.z64`, cuyo SHA1 coincida con `sm64.us.sha1`.
-
-## Compilación desde la interfaz de xSDK
-
-La [receta de proyecto](docs/xbox360/XSDK_RECIPE.md) permite construir las correcciones actuales desde xSDK con interfaz en inglés, español o portugués. Selecciona la raíz del repositorio, tus herramientas y SDL3 Xenon; usa Release. No incluye ROM, assets ni XEX y no garantiza FPS.
 
 ## Instalación
 
@@ -54,6 +50,8 @@ La [receta de proyecto](docs/xbox360/XSDK_RECIPE.md) permite construir las corre
 1. Instala MSYS2 y Git.
 2. Clona [xSDK](https://github.com/ZenithUzu/xsdk) en `C:\xsdk-windows` y ejecuta `Iniciar-Windows.cmd`. Esa interfaz instala dependencias y construye el compilador en `C:\xsdk-tools\compiler` y el SDK.
 3. Clona SDL3 Xenon en `C:\SDL-xenon` y compílalo en `C:\SDL-xenon\build-xsdk` usando como toolchain de CMake `C:/xsdk-windows/cmake/xsdk.cmake`, en modo Release.
+
+Si actualizas xSDK, vuelve a compilar SDL3 Xenon antes de compilar el juego, para que ambos usen el mismo SDK.
 
 ### 2. Descarga el código
 
@@ -65,15 +63,29 @@ cd sm64coopdx360
 python platform\xsdk\restore_inherited_inputs.py
 ```
 
-Ese script recupera del historial público de Coop Deluxe los archivos heredados que este repositorio ya no rastrea (mods incluidos, sonidos, texturas). Quedan solo en tu copia local: no los agregues a Git.
+Ese script recupera del historial público de Coop Deluxe los archivos heredados que este repositorio ya no rastrea (mods incluidos, sonidos, texturas). Quedan solo en tu copia local: no los agregues a Git. Úsalo solo si tienes permiso para usar esos archivos; este proyecto no concede derechos sobre ellos.
 
 ### 3. Compila
+
+Elige una de estas dos formas. Las dos usan la misma receta y tu ROM solo se usa localmente.
+
+**Con la interfaz de xSDK**
+
+1. Abre `Iniciar-Windows.cmd` y elige tu idioma.
+2. Indica las rutas de MSYS2, xSDK, el compilador y SDL3 Xenon.
+3. Selecciona la raíz de este repositorio, donde está `xsdk-project.json`, y tu ROM.
+4. Deja **Release**, pulsa **Comprobar receta del port** y luego **Compilar proyecto**.
+5. El resultado queda en `<trabajo>/projects/<nombre-del-repositorio>/`.
+
+Más detalle en la [receta de proyecto](docs/xbox360/XSDK_RECIPE.md).
+
+**Con PowerShell**
 
 ```powershell
 .\platform\xsdk\build.ps1 -Game -RomPath 'C:\private\baserom.us.z64' -OutDir 'C:\build\sm64coopdx360'
 ```
 
-Tu ROM se valida y solo se usa localmente. Al terminar tendrás `C:\build\sm64coopdx360\sm64coopdx.xex`. Otras rutas y opciones están en [docs/xbox360/BUILD.md](docs/xbox360/BUILD.md).
+Al terminar tendrás `sm64coopdx.xex` y `build-info.json` en esa carpeta. Otras rutas y opciones están en [docs/xbox360/BUILD.md](docs/xbox360/BUILD.md).
 
 ### 4. Copia los archivos a la consola
 
@@ -149,12 +161,60 @@ python platform\xsdk\port_dynos_pack.py "C:\ruta\pack" --report
 | La consola se queda sin memoria con un pack | Redúcelo con `port_dynos_pack.py` |
 | No compila | Rutas de `C:\msys64`, xSDK y SDL3; luego [BUILD.md](docs/xbox360/BUILD.md) |
 
+## Cómo se logró
+
+Estas son las correcciones que marcaron la diferencia. El detalle por iteración está en [STATUS.md](docs/xbox360/STATUS.md) y en el historial. Las cifras de FPS son observaciones en una consola, no una garantía.
+
+**Rendimiento**
+
+| Problema | Solución |
+| --- | --- |
+| Bordes dentados al dibujar a 640×360 y ampliar | El juego dibuja a 1280×720 nativo y copia directo al búfer de pantalla, sin pase de ampliación |
+| Un cuadro tarde bajaba el juego a 30 FPS | Tres búferes de presentación en vez de dos |
+| La CPU esperaba a la GPU en cada lote | Arena de 8 bloques de 8192 vértices; solo se espera al reutilizar el bloque más antiguo |
+| Copiar vértices costaba demasiado | Se escriben solo los atributos que lee cada material |
+| Shader genérico lento | 32 shaders especializados, generados al compilar a partir de 40 casos del motor; el genérico queda de respaldo |
+| Limpieza de eDRAM en mal orden | Se limpia al final, porque los targets comparten tiles |
+| Packs de texturas agotaban la memoria | Las texturas DynOS se decodifican al dibujarlas, con lado máximo de 512 píxeles; no se cargan más actores con menos de 64 MB libres |
+
+**Conexión**
+
+| Problema | Solución |
+| --- | --- |
+| PC y teléfonos son little-endian, la Xbox big-endian | Los paquetes viajan en little-endian y `packet_read`/`packet_write` convierten cada valor (`packet_wire.h`) |
+| Cada paquete salía con tipo 0 | `packet_init` escribía el byte alto del tipo y de los números de nivel; ahora escribe el valor real |
+| La conexión ICE fallaba entre consola y PC | SHA1 corregido para big-endian en libjuice, más ajustes de STUN y sockets para xSDK |
+| Sin salas en la consola | CoopNet y libjuice se compilan desde fuente en `lib/xsdk` |
+| Salas de Android invisibles | Nombre de juego `sm64coop-android` en servidores públicos |
+
+**Mods**
+
+| Problema | Solución |
+| --- | --- |
+| Binarios DynOS escritos en little-endian | Lectura con `BinFile` y conversión por comando de niveles y geometría (`dynos_cmd_order.h`) |
+| Audio de mods sin dispositivo de salida | Miniaudio sin dispositivo, mezclado con el audio del juego |
+| La consola se colgaba al crear partida con mods | `dynamic_pool_alloc` desalineaba los atómicos de 64 bits, que PowerPC no tolera; ahora conserva la alineación |
+
+**Referencia:** se analizó un XEX de SM64 ya existente para comparar enfoques. Usa D3D9, XAudio2 y shaders por material. Este port no contiene su ejecutable, su código ni sus assets, y usa xSDK en lugar del XDK oficial.
+
 ## Reportar errores y contribuir
 
-Indica el commit, la escena, la configuración y el log, sin IP, rutas ni nombres personales. Distingue siempre **compilado**, **instalado** y **probado en consola**. Lee [CONTRIBUTING.md](CONTRIBUTING.md); el detalle técnico está en [STATUS.md](docs/xbox360/STATUS.md).
+Indica el commit, `build-info.json`, la escena, la configuración y el log, sin IP, rutas ni nombres personales. Distingue siempre **compilado**, **instalado** y **probado en consola**. Lee [CONTRIBUTING.md](CONTRIBUTING.md); el detalle técnico está en [STATUS.md](docs/xbox360/STATUS.md).
 
 ## Licencias y atribución
 
-No hay una licencia única para todo el material heredado. [LICENSE.md](LICENSE.md) cubre los módulos originales del port con MIT y no relicencia el juego, los archivos de upstream ni las dependencias. Los componentes de terceros, entre ellos CoopNet (AGPL-3.0) y libjuice (MPL-2.0), están en [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Ningún aviso concede derechos sobre ROMs, assets o SDKs de terceros.
+Este repositorio no tiene una licencia única:
+
+| Parte | Licencia |
+| --- | --- |
+| Módulos originales del port | MIT, según [LICENSE.md](LICENSE.md) |
+| CoopNet (`lib/xsdk/coopnet`) | AGPL-3.0 |
+| libjuice (`lib/xsdk/libjuice`) | MPL-2.0 |
+| Lua y zlib | Sus propias licencias permisivas |
+| xSDK | MIT, en su propio repositorio |
+| Código heredado de sm64coopdx, sm64ex-coop, sm64-port y n64decomp | Sus avisos originales; no se relicencia |
+| Juego, ROM y assets | Sin licencia: pertenecen a sus titulares |
+
+El juego compilado enlaza CoopNet, así que quien **distribuya** un XEX debe cumplir la AGPL-3.0, además de los derechos del juego. Por eso este proyecto solo publica el código. La lista completa está en [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Esto no es asesoría legal.
 
 Créditos a Nintendo por el juego original; a n64decomp, sm64-port, djoslin0/sm64ex-coop, Coop Deluxe y sus contribuidores por las bases del proyecto; y a los autores de xSDK, SDL, Lua, zlib, CoopNet y libjuice. Este fork no implica afiliación ni patrocinio.

@@ -14,6 +14,7 @@ Existing per-file notices and license files remain authoritative. This is an inv
 | n64graphics CI tools | `tools/n64graphics_ci_dir/LICENSE`; retained. |
 | IDO-related source/material | `tools/ido5.3_compiler/LICENSE.md`; retained, not relicensed. |
 | stb and other embedded utilities | Their source-header notices remain; inspect each component before reuse. |
+| xSDK Windows fork | `ZenithUzu/xsdk`, derived from `xenosworks/xsdk` by Mena / xenosworks and contributors; MIT in its own repository. Used as an external tool; not redistributed here. |
 | xSDK, SDL3 Xenon, GCC toolchain | External build prerequisites with their own terms; SDK/toolchain binaries are not included. |
 | Microsoft Xbox 360 SDK / XBDM | External tools/API prerequisite for optional diagnostics and mouse path; not redistributed and not licensed by this fork. |
 

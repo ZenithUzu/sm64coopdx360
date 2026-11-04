@@ -14,7 +14,7 @@ La iteración 35 usa el nombre de juego `sm64coop-android` en servidores no priv
 
 - `platform/xsdk/CMakeLists.txt`, `build.ps1`, `prepare_assets.py`: compilación y generación local de assets.
 - `src/pc/gfx/gfx_xenos.c`: estados Xenos, texturas, arena y pase de ampliación.
-- `platform/xsdk/build_material_shaders.py`: especialización offline de 24 patrones desde 40 casos del motor; shader genérico para el resto.
+- `platform/xsdk/build_material_shaders.py`: especialización offline de 32 patrones desde 40 casos del motor; shader genérico para el resto.
 - `include/level_script_read.h`: campos de comandos con anchuras correctas para PowerPC de 32 bits.
 - `platform/xsdk/input_usb.c`: teclado XAM y mouse XBDM opcional. El teclado físico fue probado. Disponibilidad de la API de mouse no demuestra soporte del hardware conectado.
 - `src/pc/audio/audio_sdl3.c`: salida S16 estéreo a 32 kHz y conversión por SDL3. La mezcla del juego sigue en el hilo principal; puede quedar sin muestras bajo carga.
