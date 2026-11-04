@@ -4,8 +4,9 @@
 #include <sys/times.h>
 #include <unistd.h>
 
-/* xSDK implements unlinkat with the kernel directory-disposition option. */
-int rmdir(const char *path) {
+/* Older xSDK revisions need this fallback. Newer SDKs provide rmdir in path.c;
+ * their strong definition must take precedence when that object is linked. */
+__attribute__((weak)) int rmdir(const char *path) {
     return unlinkat(AT_FDCWD, path, AT_REMOVEDIR);
 }
 

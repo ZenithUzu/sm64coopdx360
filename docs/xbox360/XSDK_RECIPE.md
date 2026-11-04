@@ -59,3 +59,7 @@ Para comparar rendimiento, usa el mismo mapa, cámara, resolución, mods, límit
 ## Validación de esta integración
 
 El 3 de noviembre de 2026 se comprobó la receta con las herramientas instaladas y una construcción Release en una carpeta de salida nueva compiló los shaders y los 630 pasos del juego. Tras corregir la herencia de módulos de PowerShell 7 al iniciar Windows PowerShell 5 desde Python, la receta terminó correctamente y produjo el XEX y el reporte local. Las pruebas host de la herramienta validaron los tres idiomas, argumentos con espacios, límites de trabajos, herramientas faltantes y rechazo de scripts fuera del repositorio. No se realizó una prueba nueva de esta integración en consola.
+
+## Compatibilidad con xSDK actualizado
+
+El fork de Windows integra upstream `5f6dc72`, que ya proporciona `rmdir`. El respaldo del port en `platform/xsdk/posix_xsdk.c` usa un símbolo débil para evitar una definición duplicada y dar prioridad a la implementación del SDK nuevo; con el SDK anterior se conserva el respaldo. Una prueba de enlace POSIX en Windows pasó con ambas bibliotecas y se comprobó la selección del símbolo. No se ejecutó esa prueba en consola. Recompila el port después de actualizar el SDK.
