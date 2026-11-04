@@ -1,6 +1,6 @@
 # sm64coopdx360
 
-Port **experimental** de [sm64coopdx](https://github.com/coop-deluxe/sm64coopdx) para Xbox 360, basado en el trabajo de sm64ex-coop y sm64-port. No es una versión oficial de Nintendo ni del equipo Coop Deluxe.
+Port **experimental** de [sm64coopdx](https://github.com/coop-deluxe/sm64coopdx) para Xbox 360. No es una versión oficial de Nintendo ni del equipo Coop Deluxe.
 
 Este repositorio publica código fuente y documentación. **No incluye ROM, XEX, SDKs, bibliotecas precompiladas ni paquetes de assets del juego.** No hay una descarga lista para jugar. El historial del fork procede de upstream; la limpieza del árbol actual no elimina archivos de commits anteriores.
 
