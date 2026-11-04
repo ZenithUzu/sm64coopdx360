@@ -2,6 +2,7 @@
 #define DYNOS_CPP_H
 #ifdef __cplusplus
 
+#include "pc/network/packets/packet_wire.h"
 #include "dynos.h"
 #include <vector>
 
@@ -78,6 +79,12 @@ enum {
 // DynOS Binary file struct
 //
 
+// Binaries hold little-endian scalars: they come from PC builds, on every platform.
+template <typename T>
+inline void BinFile_FromLittleEndian(T *aItem) {
+    if constexpr (std::is_arithmetic_v<T> && sizeof(T) > 1) { packet_wire_order(aItem, sizeof(T)); }
+}
+
 class BinFile {
 private:
     void Grow(s32 newSize) {
@@ -153,6 +160,7 @@ public:
         T _Item = { 0 };
         if (mOffset + sizeof(T) <= mSize) {
             memcpy(&_Item, mData + mOffset, sizeof(T));
+            BinFile_FromLittleEndian(&_Item);
             mOffset += sizeof(T);
         }
         return _Item;
@@ -165,6 +173,7 @@ public:
         }
         if (mOffset + aCount * sizeof(T) <= mSize) {
             memcpy(aBuffer, mData + mOffset, aCount * sizeof(T));
+            for (s32 i = 0; i != aCount; ++i) { BinFile_FromLittleEndian(&aBuffer[i]); }
             mOffset += aCount * sizeof(T);
         }
         return aBuffer;

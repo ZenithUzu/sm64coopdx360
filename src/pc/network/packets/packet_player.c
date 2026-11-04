@@ -1,3 +1,4 @@
+#include "packet_wire.h"
 #include <stdio.h>
 #include <stddef.h>
 #include "../network.h"
@@ -81,6 +82,54 @@ struct PacketPlayerData {
     s32 dialogId;
 };
 #pragma pack()
+
+static void packet_player_data_wire_order(struct PacketPlayerData* data) {
+    for (s32 i = 0; i < OBJECT_NUM_REGULAR_FIELDS; i++) { packet_wire_order(&data->rawData[i], sizeof(u32)); }
+#define WIRE_FIELD(field) packet_wire_order(&data->field, sizeof(data->field))
+    WIRE_FIELD(cRawStickX);
+    WIRE_FIELD(cRawStickY);
+    WIRE_FIELD(cStickX);
+    WIRE_FIELD(cStickY);
+    WIRE_FIELD(cStickMag);
+    WIRE_FIELD(cButtonDown);
+    WIRE_FIELD(cButtonPressed);
+    WIRE_FIELD(cButtonReleased);
+    WIRE_FIELD(cExtStickX);
+    WIRE_FIELD(cExtStickY);
+    WIRE_FIELD(nodeFlags);
+    WIRE_FIELD(input);
+    WIRE_FIELD(flags);
+    WIRE_FIELD(particleFlags);
+    WIRE_FIELD(action);
+    WIRE_FIELD(prevAction);
+    WIRE_FIELD(actionState);
+    WIRE_FIELD(actionTimer);
+    WIRE_FIELD(actionArg);
+    WIRE_FIELD(intendedMag);
+    WIRE_FIELD(intendedYaw);
+    WIRE_FIELD(invincTimer);
+    WIRE_FIELD(slideYaw);
+    WIRE_FIELD(twirlYaw);
+    WIRE_FIELD(forwardVel);
+    WIRE_FIELD(slideVelX);
+    WIRE_FIELD(slideVelZ);
+    WIRE_FIELD(health);
+    WIRE_FIELD(peakHeight);
+    WIRE_FIELD(currentRoom);
+    WIRE_FIELD(heldSyncID);
+    WIRE_FIELD(heldBySyncID);
+    WIRE_FIELD(riddenSyncID);
+    WIRE_FIELD(interactSyncID);
+    WIRE_FIELD(usedSyncID);
+    WIRE_FIELD(platformSyncID);
+    WIRE_FIELD(dialogId);
+    for (s32 i = 0; i < 3; i++) { WIRE_FIELD(faceAngle[i]); }
+    for (s32 i = 0; i < 3; i++) { WIRE_FIELD(angleVel[i]); }
+    for (s32 i = 0; i < 3; i++) { WIRE_FIELD(pos[i]); }
+    for (s32 i = 0; i < 3; i++) { WIRE_FIELD(vel[i]); }
+    for (s32 i = 0; i < 3; i++) { WIRE_FIELD(headRotation[i]); }
+#undef WIRE_FIELD
+}
 
 static void read_packet_data(struct PacketPlayerData* data, struct MarioState* m) {
     u32 heldSyncID     = (m->heldObj != NULL)            ? m->heldObj->oSyncID            : 0;
@@ -233,6 +282,7 @@ void network_send_player(u8 localIndex) {
     struct Packet p = { 0 };
     packet_init(&p, PACKET_PLAYER, false, PLMT_AREA);
     packet_write(&p, &gNetworkPlayers[localIndex].globalIndex, sizeof(u8));
+    packet_player_data_wire_order(&data);
     packet_write(&p, &data, sizeof(struct PacketPlayerData));
     network_send(&p);
 }
@@ -278,6 +328,7 @@ void network_receive_player(struct Packet* p) {
     // load mario information from packet
     struct PacketPlayerData data = { 0 };
     packet_read(p, &data, sizeof(struct PacketPlayerData));
+    packet_player_data_wire_order(&data);
 
     // check to see if we should just drop this packet
     if (oldData.action == ACT_JUMBO_STAR_CUTSCENE && data.action == ACT_JUMBO_STAR_CUTSCENE) {

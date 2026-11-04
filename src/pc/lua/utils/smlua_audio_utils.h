@@ -97,6 +97,9 @@ void audio_sample_stop(struct ModAudio* audio);
 void audio_sample_play(struct ModAudio* audio, Vec3f position, f32 volume);
 
 void audio_custom_update_volume(void);
+#if defined(__XSDK__)
+void smlua_audio_custom_mix(s16 *output, u32 frames, bool mute);
+#endif
 void audio_custom_shutdown(void);
 void smlua_audio_custom_deinit(void);
 

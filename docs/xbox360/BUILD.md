@@ -8,9 +8,11 @@
 - SDL3 Xenon compilado para ese xSDK. Su backend actual no proporciona una ventana OpenGL: la presentación del juego es propia.
 - MSYS2 UCRT64: CMake, Ninja, Python, GCC y Make para herramientas anfitrión.
 - Una ROM US aportada por el usuario, cuyo SHA1 coincida con `sm64.us.sha1`.
-- Los assets privados que necesita la base heredada. Véase `private-inputs.json`: el árbol público no trae esos medios ni bibliotecas precompiladas.
+- Los archivos heredados de `private-inputs.json`. El árbol público no los trae; `python platform/xsdk/restore_inherited_inputs.py` los recupera del commit de upstream en el historial, sin agregarlos a Git. Requiere un clon completo.
 
 xSDK, SDL y el toolchain son dependencias externas; no se redistribuyen sus binarios aquí. El SDK oficial no está incluido y solo se usa externamente para herramientas de diagnóstico/transferencia. No se requiere VS2010 para el build GCC actual.
+
+La guía de instalación completa, con los archivos que van en la consola, está en el [README](../../README.md). Un clon limpio con los archivos heredados restaurados compiló el XEX completo el 3 de noviembre de 2026, con xSDK y SDL3 ya instalados; ese XEX no se probó en consola.
 
 ## Rutas y comandos
 
@@ -47,6 +49,17 @@ cc -std=c99 -Wall -Wextra -Werror -Isrc/pc/gfx platform/xsdk/tests/combiner_test
 /tmp/combiner_test
 cc -std=c99 -Wall -Wextra -Werror -D_LANGUAGE_C -DF3DEX_GBI_2E -Iinclude -I. platform/xsdk/tests/level_script_read_test.c -o /tmp/level_script_test
 /tmp/level_script_test
+cc -std=c99 -Wall -Wextra -Werror -Isrc/pc/network/packets platform/xsdk/tests/packet_wire_test.c -o /tmp/packet_wire_test
+/tmp/packet_wire_test
+cc -std=c99 -Wall -Wextra -Werror -Isrc/pc/network/packets platform/xsdk/tests/packet_safe_path_test.c -o /tmp/packet_safe_path_test
+/tmp/packet_safe_path_test
+cc -std=c99 -Wall -Wextra -Werror -Isrc/pc/gfx platform/xsdk/tests/gfx_xsdk_lut_test.c -lm -o /tmp/gfx_xsdk_lut_test
+/tmp/gfx_xsdk_lut_test
+cc -std=c99 -Wall -Wextra -Werror -Idata -Isrc platform/xsdk/tests/dynos_cmd_order_test.c -o /tmp/dynos_cmd_order_test
+/tmp/dynos_cmd_order_test
+cc -std=c99 -Wall -Wextra -Werror -Idata platform/xsdk/tests/dynos_tex_shrink_test.c -o /tmp/dynos_tex_shrink_test
+/tmp/dynos_tex_shrink_test
+python3 platform/xsdk/tests/port_dynos_pack_test.py
 ```
 
 La CI realiza controles de fuente; no descarga ROMs, no necesita credenciales de consola y no publica artefactos del juego.

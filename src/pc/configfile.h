@@ -179,6 +179,10 @@ extern bool         configDjuiThemeCenter;
 extern bool         configDjuiThemeGradients;
 extern unsigned int configDjuiThemeFont;
 extern unsigned int configDjuiScale;
+#ifdef __XSDK__
+extern unsigned int configXboxOutputGamma;
+extern bool         configXboxLimitedRange;
+#endif
 // other
 extern unsigned int configRulesVersion;
 extern bool         configHideSocketWarning;

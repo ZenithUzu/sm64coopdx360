@@ -1,3 +1,4 @@
+#include "packet_wire.h"
 #include <stdio.h>
 #include "../network.h"
 #include "pc/utils/misc.h"
@@ -65,6 +66,7 @@ void network_send_ack(struct Packet* p) {
     // grab seq num
     u16 seqId = 0;
     memcpy(&seqId, &p->buffer[1], 2);
+    packet_wire_order(&seqId, sizeof(u16));
     p->seqId = seqId;
     p->reliable = (seqId != 0);
     if (seqId == 0) { return; }

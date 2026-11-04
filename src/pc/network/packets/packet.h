@@ -164,9 +164,16 @@ void packet_init(struct Packet* packet, enum PacketType packetType, bool reliabl
 void packet_duplicate(struct Packet* srcPacket, struct Packet* dstPacket);
 void packet_set_flags(struct Packet* packet);
 void packet_set_destination(struct Packet* packet, u8 destGlobalId);
+// Lengths of 2, 4 and 8 are one scalar, converted to wire order; use the _bytes form for variable-length byte data.
 void packet_write(struct Packet* packet, void* data, u16 length);
+void packet_write_bytes(struct Packet* packet, void* data, u16 length);
+void packet_write_u32s(struct Packet* packet, void* data, u16 count);
+#define packet_write_u8(packet, value) do { u8 packetByte_ = (u8)(value); packet_write(packet, &packetByte_, sizeof(u8)); } while (0)
 u8 packet_initial_read(struct Packet* packet);
 void packet_read(struct Packet* packet, void* data, u16 length);
+void packet_read_bytes(struct Packet* packet, void* data, u16 length);
+void packet_read_u32s(struct Packet* packet, void* data, u16 count);
+#define packet_read_u8(packet, target) do { u8 packetByte_ = 0; packet_read(packet, &packetByte_, sizeof(u8)); (target) = packetByte_; } while (0)
 u32 packet_hash(struct Packet* packet);
 bool packet_check_hash(struct Packet* packet);
 void packet_ordered_begin(void);

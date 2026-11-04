@@ -21,6 +21,12 @@ typedef struct sockaddr_in6 CoopSocketAddress;
 #define COOP_SOCKET_TEXT_LENGTH INET6_ADDRSTRLEN
 #define COOP_SOCKET_ANY in6addr_any
 #endif
+#if defined(__XSDK__) && defined(COOPNET)
+#include "xsdk/net.h"
+// CoopNet opens one UDP socket per peer, and XAM starts with 8.
+const XsdkNetworkLimits xsdk_network_limits = { .datagram_sockets = 32 };
+#endif
+
 static SOCKET sCurSocket = INVALID_SOCKET;
 static CoopSocketAddress sAddr[MAX_PLAYERS] = { 0 };
 struct addrinfo hints;

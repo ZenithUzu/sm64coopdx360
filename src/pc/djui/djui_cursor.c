@@ -3,6 +3,9 @@
 #include "pc/controller/controller_mouse.h"
 #include "pc/gfx/gfx_window_manager_api.h"
 #include "pc/pc_main.h"
+#if defined(__XSDK__)
+#include "pc/controller/controller_xsdk.h"
+#endif
 
 #define CURSOR_GFX_MAX_SIZE 20
 
@@ -127,6 +130,10 @@ static void djui_cursor_update_position(void) {
     if (!djui_panel_is_active()) { return; }
 
     controller_mouse_read_window();
+#if defined(__XSDK__)
+    // While something holds the focus the stick is its own.
+    if (gInteractableFocus == NULL) { controller_xsdk_menu_cursor(); }
+#endif
 
     // check if mouse is in control again
     static bool sFirstUpdate = true;

@@ -3,6 +3,17 @@ Unknown combinations continue to use the generic shader. No reference binary dat
 """
 import argparse,json,pathlib,re,subprocess,sys
 
+MISSED_COMMANDS=[
+    [9,0,1,0,10,0,2,0,14,0,3,0,15,0,4,0],
+    [1,0,2,0,3,0,4,0,1,0,2,0,3,0,4,0],
+    [9,1,11,1,10,0,2,0,11,1,9,1,12,0,2,0],
+    [9,1,10,1,12,0,2,0,11,1,10,1,10,0,2,0],
+    [9,0,1,0,10,0,2,0,11,0,1,14,0,0,0,15],
+    [9,0,1,0,0,0,0,10,11,0,1,0,0,0,0,12],
+    [9,0,1,0,0,0,0,2,0,0,0,14,0,0,0,15],
+    [9,0,1,0,10,0,2,0,0,0,0,14,0,0,0,15],
+]
+
 def shader_commands(words,two_cycle):
     inputs={};out=[]
     fixed={0:0,1:9,2:11,6:10,8:13,9:12,10:14 if two_cycle else 0,11:15 if two_cycle else 0,15:16}
@@ -27,6 +38,9 @@ def main():
     patterns=[]
     for row in fixtures:
         commands=shader_commands(row[:4],bool(row[4]&16))
+        if commands not in patterns:patterns.append(commands)
+    # Seen on console as "material miss" and not reachable from the precompiled list.
+    for commands in MISSED_COMMANDS:
         if commands not in patterns:patterns.append(commands)
     template=(a.repo/'platform/xsdk/shaders/coopdx.frag').read_text()
     values=['vec4(0)']+[f'i{i}' for i in range(8)]+['t0','vec4(t0.a)','t1','vec4(t1.a)','vec4(1)','combined','vec4(combined.a)','vec4(noise)']

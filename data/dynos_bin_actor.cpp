@@ -1,4 +1,10 @@
 #include "dynos.cpp.h"
+#if defined(__XSDK__)
+extern "C" {
+#include "xsdk/kernel.h"
+#include "pc/djui/djui_popup.h"
+}
+#endif
 
 // Free data pointers, but keep nodes and tokens intact
 // Delete nodes generated from GfxDynCmds
@@ -88,6 +94,22 @@ GfxData *DynOS_Actor_LoadFromBinary(const SysPath &aPackFolder, const char *aAct
             return _ActorPair->second;
         }
     }
+
+#if defined(__XSDK__)
+    // Running out of memory takes the console down: leave the rest of the pack unloaded and say so.
+    MM_QUERY_STATISTICS_RESULT _Statistics;
+    memset(&_Statistics, 0, sizeof(_Statistics));
+    _Statistics.size = sizeof(_Statistics);
+    if (NT_SUCCESS(MmQueryStatistics(&_Statistics)) && _Statistics.title.available_pages < (64u * 1024 * 1024) / 4096) {
+        static bool sWarned = false;
+        PrintError("Not enough memory to load actor '%s'", aActorName);
+        if (!sWarned) {
+            sWarned = true;
+            djui_popup_create("Not enough memory: part of this model pack was not loaded.", 2);
+        }
+        return NULL;
+    }
+#endif
 
     // Load data from binary file
     GfxData *_GfxData = NULL;

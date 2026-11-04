@@ -1,3 +1,4 @@
+#include "packet_wire.h"
 #include "../network.h"
 #include "game/area.h"
 #include "pc/debuglog.h"
@@ -29,7 +30,7 @@ void packet_init(struct Packet* packet, enum PacketType packetType, bool reliabl
     packet->orderedSeqId        = 0;
     packet->keepSendingAfterDisconnect = false;
 
-    packet_write(packet, &packetType, sizeof(u8));
+    packet_write_u8(packet, packetType);
 
     // write seq number
     if (reliable) {
@@ -60,17 +61,17 @@ void packet_init(struct Packet* packet, enum PacketType packetType, bool reliabl
 
     // write location
     if (packet->levelAreaMustMatch) {
-        packet_write(packet, &gCurrCourseNum,  sizeof(u8));
-        packet_write(packet, &gCurrActStarNum, sizeof(u8));
+        packet_write_u8(packet, gCurrCourseNum);
+        packet_write_u8(packet, gCurrActStarNum);
         packet_write(packet, &gCurrLevelNum,   sizeof(s16));
-        packet_write(packet, &gCurrAreaIndex,  sizeof(u8));
+        packet_write_u8(packet, gCurrAreaIndex);
         packet->courseNum = gCurrCourseNum;
         packet->actNum    = gCurrActStarNum;
         packet->levelNum  = gCurrLevelNum;
         packet->areaIndex = gCurrAreaIndex;
     } else if (packet->levelMustMatch) {
-        packet_write(packet, &gCurrCourseNum,  sizeof(u8));
-        packet_write(packet, &gCurrActStarNum, sizeof(u8));
+        packet_write_u8(packet, gCurrCourseNum);
+        packet_write_u8(packet, gCurrActStarNum);
         packet_write(packet, &gCurrLevelNum,   sizeof(s16));
         packet->courseNum = gCurrCourseNum;
         packet->actNum    = gCurrActStarNum;
@@ -110,7 +111,9 @@ void packet_duplicate(struct Packet* srcPacket, struct Packet* dstPacket) {
     } else {
         dstPacket->seqId = 0;
     }
-    memcpy(&dstPacket->buffer[1], &dstPacket->seqId, 2);
+    u16 wireSeqId = dstPacket->seqId;
+    packet_wire_order(&wireSeqId, sizeof(u16));
+    memcpy(&dstPacket->buffer[1], &wireSeqId, 2);
 
     dstPacket->dataLength = srcPacket->dataLength;
     dstPacket->cursor = dstPacket->dataLength;
@@ -130,6 +133,21 @@ void packet_set_destination(struct Packet* packet, u8 destGlobalId) {
 }
 
 void packet_write(struct Packet* packet, void* data, u16 length) {
+    if (data != NULL && PACKET_WIRE_SWAP && packet_wire_is_scalar(length)) {
+        u8 wire[8];
+        memcpy(wire, data, length);
+        packet_wire_order(wire, length);
+        packet_write_bytes(packet, wire, length);
+        return;
+    }
+    packet_write_bytes(packet, data, length);
+}
+
+void packet_write_u32s(struct Packet* packet, void* data, u16 count) {
+    for (u16 i = 0; i < count; i++) { packet_write(packet, (u8*)data + i * sizeof(u32), sizeof(u32)); }
+}
+
+void packet_write_bytes(struct Packet* packet, void* data, u16 length) {
     if (data == NULL) { packet->error = true; return; }
 #ifdef DEBUG
     assert(packet->dataLength + length <= PACKET_LENGTH);
@@ -184,6 +202,16 @@ u8 packet_initial_read(struct Packet* packet) {
 
 void packet_read(struct Packet* packet, void* data, u16 length) {
     u16 cursor = packet->cursor;
+    packet_read_bytes(packet, data, length);
+    if (packet->cursor != cursor && packet_wire_is_scalar(length)) { packet_wire_order(data, length); }
+}
+
+void packet_read_u32s(struct Packet* packet, void* data, u16 count) {
+    for (u16 i = 0; i < count; i++) { packet_read(packet, (u8*)data + i * sizeof(u32), sizeof(u32)); }
+}
+
+void packet_read_bytes(struct Packet* packet, void* data, u16 length) {
+    u16 cursor = packet->cursor;
     if (data == NULL) { packet->error = true; return; }
     if (cursor + length >= PACKET_LENGTH) { packet->error = true; return; }
 
@@ -205,6 +233,7 @@ bool packet_check_hash(struct Packet* packet) {
     u32 localHash = packet_hash(packet);
     u32 packetHash = 0;
     memcpy(&packetHash, &packet->buffer[packet->dataLength], sizeof(u32));
+    packet_wire_order(&packetHash, sizeof(u32));
     return localHash == packetHash;
 }
 
@@ -226,6 +255,7 @@ void packet_set_ordered_data(struct Packet* packet) {
     if (packet->orderedGroupId == 0) { return; }
     if (packet->orderedSeqId != 0) { return; }
     packet->orderedSeqId = sCurrentOrderedSeqId++;
-    u16* seqId = (u16*)&packet->buffer[PACKET_ORDERED_SEQ_ID_OFFSET];
-    *seqId = packet->orderedSeqId;
+    u16 wireSeqId = packet->orderedSeqId;
+    packet_wire_order(&wireSeqId, sizeof(u16));
+    memcpy(&packet->buffer[PACKET_ORDERED_SEQ_ID_OFFSET], &wireSeqId, sizeof(u16));
 }

@@ -1,4 +1,5 @@
 #include "djui.h"
+#include "pc/utils/misc.h"
 
 static void djui_slider_update_style(struct DjuiBase* base) {
     struct DjuiSlider* slider = (struct DjuiSlider*)base;
@@ -81,6 +82,12 @@ static void djui_slider_on_cursor_down(struct DjuiBase* base) {
 
 static void djui_slider_on_cursor_down_begin(struct DjuiBase* base, bool inputCursor) {
     struct DjuiSlider* slider = (struct DjuiSlider*)base;
+#if defined(__XSDK__)
+    // The console's cursor is the gamepad: touching a bar gives it to the stick and d-pad instead of dragging.
+    (void)inputCursor; (void)slider;
+    djui_interactable_set_input_focus(base);
+    return;
+#endif
     f32 x = slider->rect->base.elem.x;
     if (gCursorX >= x) {
         if (inputCursor) {
@@ -100,6 +107,19 @@ static void djui_slider_on_cursor_down_end(struct DjuiBase* base) {
 
 static void djui_slider_on_focus(struct DjuiBase* base, OSContPad* pad) {
     struct DjuiSlider* slider = (struct DjuiSlider*)base;
+#if defined(__XSDK__)
+    // A tap moves exactly one step, and holding repeats after a pause.
+    static s8 sHoldDirection = 0;
+    static f32 sHoldUntil = 0;
+    if (abs(pad->stick_x) < 32) { sHoldDirection = 0; return; }
+    const s8 direction = (pad->stick_x > 0) ? 1 : -1;
+    if (direction != sHoldDirection) {
+        sHoldDirection = direction;
+        sHoldUntil = clock_elapsed() + 0.3f;
+    } else if (clock_elapsed() < sHoldUntil) {
+        return;
+    }
+#endif
     if (abs(pad->stick_x) < 32) { return; }
     int value = *slider->value;
     value += (pad->stick_x > 0) ? 1 : -1;

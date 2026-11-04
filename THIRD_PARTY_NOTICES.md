@@ -7,6 +7,8 @@ Existing per-file notices and license files remain authoritative. This is an inv
 | Game/decompilation and inherited port code | Nintendo / n64decomp / sm64-port / sm64ex-coop / Coop Deluxe and their contributors. Existing terms remain; no blanket relicense is claimed. See `credits.txt`. |
 | Lua 5.3.6 source in `lib/xsdk/lua53` | Lua.org, PUC-Rio; MIT notice in `lua.h` and adjacent `LICENSE`. Imported from `lua/lua` commit `75ea9ccbea7c4886f30da147fb67b693b2624c26`. |
 | zlib 1.3.1 source in `lib/xsdk/zlib` | Jean-loup Gailly and Mark Adler; zlib license in adjacent `LICENSE` and `zlib.h`. Imported from `madler/zlib` commit `51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf`. |
+| CoopNet source in `lib/xsdk/coopnet` | Coop Deluxe contributors; AGPL-3.0 in adjacent `LICENSE`. Imported from commit `9d9b3dd` of coop-deluxe/coopnet, modified for byte order and xSDK sockets. |
+| libjuice 1.6.2 source in `lib/xsdk/libjuice` | Paul-Louis Ageneau; MPL-2.0 in adjacent `LICENSE`. Modified for xSDK sockets and threads. |
 | miniz | Notice retained in `src/pc/utils/miniz/LICENSE` and source. |
 | SM64 tools | `tools/sm64tools.LICENSE`; existing author notices retained. |
 | n64graphics CI tools | `tools/n64graphics_ci_dir/LICENSE`; retained. |

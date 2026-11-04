@@ -69,6 +69,10 @@ f32 round_to_multiple_f(f32 value, f32 multiple) {
 
 f32 djui_gfx_get_scale(void) {
     if (configDjuiScale == 0) { // auto
+#if defined(__XSDK__)
+        // The console renders 720p, where 1.0 leaves tall panels' buttons off screen, with no way to scroll to them.
+        return 0.75f;
+#endif
         u32 windowWidth, windowHeight;
         gfx_get_dimensions(&windowWidth, &windowHeight);
         return clamp(round_to_multiple_f(((f32)windowHeight / (f32)SCREEN_HEIGHT) / 4.0f, 0.5f), 0.5f, 1.5f);

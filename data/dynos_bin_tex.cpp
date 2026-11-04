@@ -268,6 +268,15 @@ DataNode<TexData>* DynOS_Tex_Load(BinFile *aFile, GfxData *aGfxData) {
     } else {
         aFile->SetOffset(_FileOffset);
         _Node->mData->mPngData.Read(aFile);
+#if defined(__XSDK__)
+        // Decoded textures of one model pack outgrow the console's memory: DynOS_Tex_Upload decodes them when drawn.
+        if (!_Node->mData->mPngData.Empty()) {
+            s32 _Components = 0;
+            stbi_info_from_memory(_Node->mData->mPngData.begin(), _Node->mData->mPngData.Count(), &_Node->mData->mRawWidth, &_Node->mData->mRawHeight, &_Components);
+            _Node->mData->mRawFormat = G_IM_FMT_RGBA;
+            _Node->mData->mRawSize   = G_IM_SIZ_32b;
+        } else
+#endif
         if (!_Node->mData->mPngData.Empty()) {
             u8 *_RawData = stbi_load_from_memory(_Node->mData->mPngData.begin(), _Node->mData->mPngData.Count(), &_Node->mData->mRawWidth, &_Node->mData->mRawHeight, NULL, 4);
             _Node->mData->mRawFormat = G_IM_FMT_RGBA;

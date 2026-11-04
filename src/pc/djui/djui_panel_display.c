@@ -5,6 +5,9 @@
 #include "pc/pc_main.h"
 #include "pc/utils/misc.h"
 #include "pc/configfile.h"
+#ifdef __XSDK__
+#include "pc/gfx/gfx_xsdk.h"
+#endif
 
 #define OPTION_ORIGINAL_UNSET ((u32)-1)
 
@@ -57,6 +60,12 @@ static void djui_panel_display_msaa_change(struct DjuiBase* caller) {
 
     djui_panel_display_update_restart_text(caller);
 }
+
+#ifdef __XSDK__
+static void djui_panel_display_output_levels_change(UNUSED struct DjuiBase* caller) {
+    gfx_xsdk_apply_output_levels();
+}
+#endif
 
 void djui_panel_display_create(struct DjuiBase* caller) {
     struct DjuiThreePanel* panel = djui_panel_menu_create(DLANG(DISPLAY, DISPLAY), false);
@@ -141,6 +150,11 @@ void djui_panel_display_create(struct DjuiBase* caller) {
             DLANG(DISPLAY, INFINITE),
         };
         djui_selectionbox_create(body, DLANG(DISPLAY, DRAW_DISTANCE), drawDistanceChoices, ARRAY_COUNT(drawDistanceChoices), &configDrawDistance, NULL);
+
+#ifdef __XSDK__
+        djui_slider_create(body, "Gamma de salida (TV)", &configXboxOutputGamma, 70, 130, djui_panel_display_output_levels_change);
+        djui_checkbox_create(body, "Rango limitado (TV)", &configXboxLimitedRange, djui_panel_display_output_levels_change);
+#endif
 
         djui_button_create(body, DLANG(MENU, BACK), DJUI_BUTTON_STYLE_BACK, djui_panel_menu_back);
 

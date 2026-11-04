@@ -26,7 +26,8 @@ struct DynamicPool* dynamic_pool_init(void) {
 void* dynamic_pool_alloc(struct DynamicPool *pool, u32 size) {
     if (!pool) { return NULL; }
 
-    size_t header = ALIGN_UP(sizeof(struct DynamicPoolNode), sizeof(void*));
+    // Keep malloc's alignment: mod audio holds 64-bit atomics, and PowerPC faults on misaligned ones.
+    size_t header = ALIGN_UP(sizeof(struct DynamicPoolNode), 16);
     struct DynamicPoolNode* node = malloc(header + size);
     if (!node) { return NULL; }
     node->ptr = (u8*)node + header;

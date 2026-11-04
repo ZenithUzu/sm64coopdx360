@@ -366,9 +366,20 @@ inline static void buffer_audio(void) {
         for (u16 i=0; i < ARRAY_COUNT(sAudioBuffer); i++) {
             sAudioBuffer[i] *= gMasterVolume;
         }
+#if defined(__XSDK__)
+        smlua_audio_custom_mix(sAudioBuffer, 2 * numAudioSamples, false);
+#endif
         gAudioApi->play((u8 *)sAudioBuffer, 2 * numAudioSamples * 4);
     }
+#if defined(__XSDK__)
+    else { smlua_audio_custom_mix(sAudioBuffer, 2 * numAudioSamples, true); }
+#endif
 }
+
+#if defined(__XSDK__)
+int xsdk_launch(const char *path, const void *data, size_t size_bytes);
+#include "libcoopnet.h"
+#endif
 
 void *audio_thread(UNUSED void *arg) {
     // As long as we have an audio api and that we're threaded, Loop.
@@ -523,6 +534,20 @@ void game_deinit(void) {
 void game_exit(void) {
     LOG_INFO("exiting cleanly");
     game_deinit();
+#if defined(__XSDK__)
+    // coopnet_shutdown only marks the client, and updates stop once the network does: end its socket and threads now.
+    coopnet_shutdown();
+    coopnet_update();
+    // exit() goes to the dashboard. exit_to.txt beside the .xex names the launcher to return to instead.
+    char launcher[256] = "";
+    FILE* exitTo = fopen("game:\\exit_to.txt", "r");
+    if (exitTo) {
+        if (!fgets(launcher, sizeof(launcher), exitTo)) { launcher[0] = '\0'; }
+        fclose(exitTo);
+    }
+    launcher[strcspn(launcher, "\r\n")] = '\0';
+    if (launcher[0]) { (void)xsdk_launch(launcher, NULL, 0); } // returns only if the launcher can't start
+#endif
     exit(0);
 }
 
@@ -685,7 +710,11 @@ int main(int argc, char *argv[]) {
     PORT_TRACE("startup: after network_init(NT_NONE, false);");
     }
 
-    PORT_TRACE("startup: main loop reached, scaled game target with native Guide fix 12");
+#if defined(__XSDK__)
+    // The console has no terminal: network messages go to the log, the only way to see why a join failed.
+    configDebugInfo = configDebugError = true;
+#endif
+    PORT_TRACE("startup: main loop reached, native 720p target, mods fix 35");
     // main loop
     while (true) {
         debug_context_reset();

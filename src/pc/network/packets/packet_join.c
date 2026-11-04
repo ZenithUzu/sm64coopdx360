@@ -1,3 +1,5 @@
+#include "packet_wire.h"
+#include "game/save_file.h"
 #include <stdio.h>
 #include "../network.h"
 #include "object_fields.h"
@@ -36,6 +38,29 @@ static char sJoinRequestPlayerName[MAX_CONFIG_STRING];
 static char sJoinRequestDiscordId[64];
 bool gCurrentlyJoining = false;
 
+static void eeprom_wire_order(void) {
+    struct SaveBuffer* save = (struct SaveBuffer*)eeprom;
+    for (s32 file = 0; file < NUM_SAVE_FILES; file++) {
+        for (s32 slot = 0; slot < 2; slot++) {
+            struct SaveFile* saveFile = &save->files[file][slot];
+            for (s32 i = 0; i < 3; i++) { packet_wire_order(&saveFile->capPos[i], sizeof(s16)); }
+            packet_wire_order(&saveFile->flags, sizeof(u32));
+            packet_wire_order(&saveFile->signature.magic, sizeof(u16));
+            packet_wire_order(&saveFile->signature.chksum, sizeof(u16));
+        }
+    }
+    for (s32 slot = 0; slot < 2; slot++) {
+        struct MainMenuSaveData* menu = &save->menuData[slot];
+        for (s32 i = 0; i < NUM_SAVE_FILES; i++) { packet_wire_order(&menu->coinScoreAges[i], sizeof(u32)); }
+        packet_wire_order(&menu->soundMode, sizeof(u16));
+#ifdef VERSION_EU
+        packet_wire_order(&menu->language, sizeof(u16));
+#endif
+        packet_wire_order(&menu->signature.magic, sizeof(u16));
+        packet_wire_order(&menu->signature.chksum, sizeof(u16));
+    }
+}
+
 void network_send_join_request(void) {
     SOFT_ASSERT(gNetworkType == NT_CLIENT);
 
@@ -48,7 +73,7 @@ void network_send_join_request(void) {
     snprintf(version, MAX_VERSION_LENGTH, "%s", get_version());
     packet_write(&p, &version, sizeof(u8) * MAX_VERSION_LENGTH);
 
-    packet_write(&p, &configPlayerModel,   sizeof(u8));
+    packet_write_u8(&p, configPlayerModel);
     packet_write(&p, &configPlayerPalette, sizeof(struct PlayerPalette));
     packet_write(&p, &configPlayerName,    sizeof(u8) * MAX_CONFIG_STRING);
 
@@ -115,18 +140,20 @@ void network_send_join(struct Packet* joinRequestPacket) {
     packet_write(&p, &version, sizeof(u8) * MAX_VERSION_LENGTH);
     packet_write(&p, &globalIndex, sizeof(u8));
     packet_write(&p, &gCurrSaveFileNum, sizeof(s16));
-    packet_write(&p, &gServerSettings.playerInteractions, sizeof(u8));
-    packet_write(&p, &gServerSettings.bouncyLevelBounds, sizeof(u8));
+    packet_write_u8(&p, gServerSettings.playerInteractions);
+    packet_write_u8(&p, gServerSettings.bouncyLevelBounds);
     packet_write(&p, &gServerSettings.playerKnockbackStrength, sizeof(u8));
-    packet_write(&p, &gServerSettings.stayInLevelAfterStar, sizeof(u8));
+    packet_write_u8(&p, gServerSettings.stayInLevelAfterStar);
     packet_write(&p, &gServerSettings.skipIntro, sizeof(u8));
     packet_write(&p, &gServerSettings.bubbleDeath, sizeof(u8));
     packet_write(&p, &gServerSettings.headlessServer, sizeof(u8));
     packet_write(&p, &gServerSettings.nametags, sizeof(u8));
     packet_write(&p, &gServerSettings.maxPlayers, sizeof(u8));
     packet_write(&p, &gServerSettings.pauseAnywhere, sizeof(u8));
-    packet_write(&p, &gServerSettings.pvpType, sizeof(u8));
+    packet_write_u8(&p, gServerSettings.pvpType);
+    eeprom_wire_order();
     packet_write(&p, eeprom, sizeof(u8) * 512);
+    eeprom_wire_order();
 
     network_send_to(globalIndex, &p);
     LOG_INFO("sending join packet");
@@ -168,18 +195,19 @@ void network_receive_join(struct Packet* p) {
 
     packet_read(p, &myGlobalIndex, sizeof(u8));
     packet_read(p, &gCurrSaveFileNum, sizeof(s16));
-    packet_read(p, &gServerSettings.playerInteractions, sizeof(u8));
-    packet_read(p, &gServerSettings.bouncyLevelBounds, sizeof(u8));
+    packet_read_u8(p, gServerSettings.playerInteractions);
+    packet_read_u8(p, gServerSettings.bouncyLevelBounds);
     packet_read(p, &gServerSettings.playerKnockbackStrength, sizeof(u8));
-    packet_read(p, &gServerSettings.stayInLevelAfterStar, sizeof(u8));
+    packet_read_u8(p, gServerSettings.stayInLevelAfterStar);
     packet_read(p, &gServerSettings.skipIntro, sizeof(u8));
     packet_read(p, &gServerSettings.bubbleDeath, sizeof(u8));
     packet_read(p, &gServerSettings.headlessServer, sizeof(u8));
     packet_read(p, &gServerSettings.nametags, sizeof(u8));
     packet_read(p, &gServerSettings.maxPlayers, sizeof(u8));
     packet_read(p, &gServerSettings.pauseAnywhere, sizeof(u8));
-    packet_read(p, &gServerSettings.pvpType, sizeof(u8));
+    packet_read_u8(p, gServerSettings.pvpType);
     packet_read(p, eeprom, sizeof(u8) * 512);
+    eeprom_wire_order();
 
     network_player_connected(NPT_SERVER, 0, 0, &DEFAULT_MARIO_PALETTE, "Player", "0");
     network_player_connected(NPT_LOCAL, myGlobalIndex, configPlayerModel, &configPlayerPalette, configPlayerName, get_local_discord_id());

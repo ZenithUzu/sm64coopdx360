@@ -41,6 +41,8 @@ if($Game) {
         Pop-Location
     }
 }
+# The PowerPC compiler loads its DLLs from UCRT64.
+$env:PATH='C:\msys64\ucrt64\bin;'+$env:PATH
 $gameOption=if($Game) { 'ON' } else { 'OFF' }
 & $cmake -S $PSScriptRoot -B $OutDir -G Ninja '-DCMAKE_MAKE_PROGRAM=C:/msys64/ucrt64/bin/ninja.exe' "-DCMAKE_TOOLCHAIN_FILE=$XsdkRoot/cmake/xsdk.cmake" "-DXSDK_TOOLCHAIN=$Toolchain" "-DSDL3_DIR=$SdlBuild" "-DCOOPDX_BUILD_GAME=$gameOption" -DCMAKE_BUILD_TYPE=Release
 if($LASTEXITCODE) { throw 'xSDK CMake configure failed' }

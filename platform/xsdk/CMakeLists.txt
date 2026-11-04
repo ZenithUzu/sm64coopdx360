@@ -71,6 +71,15 @@ add_library(coopdx_zlib STATIC
     ${ZLIB_ROOT}/inflate.c ${ZLIB_ROOT}/inftrees.c ${ZLIB_ROOT}/trees.c
     ${ZLIB_ROOT}/uncompr.c ${ZLIB_ROOT}/zutil.c)
 target_include_directories(coopdx_zlib PUBLIC "${ZLIB_ROOT}")
+file(GLOB JUICE_SOURCES CONFIGURE_DEPENDS "${COOPDX_ROOT}/lib/xsdk/libjuice/src/*.c")
+add_library(coopdx_juice STATIC ${JUICE_SOURCES})
+target_compile_definitions(coopdx_juice PUBLIC JUICE_STATIC NO_IFADDRS)
+target_include_directories(coopdx_juice PUBLIC "${COOPDX_ROOT}/lib/xsdk/libjuice/include" PRIVATE "${COOPDX_ROOT}/lib/xsdk/libjuice/include/juice")
+file(GLOB COOPNET_SOURCES CONFIGURE_DEPENDS "${COOPDX_ROOT}/lib/xsdk/coopnet/*.cpp")
+add_library(coopdx_coopnet STATIC ${COOPNET_SOURCES})
+target_compile_features(coopdx_coopnet PRIVATE cxx_std_17)
+target_include_directories(coopdx_coopnet PUBLIC "${COOPDX_ROOT}/lib/coopnet/include" PRIVATE "${COOPDX_ROOT}/src")
+target_link_libraries(coopdx_coopnet PUBLIC coopdx_juice)
 
 # Compile every engine source with the real target ABI, beyond the initial probes.
 file(GLOB ENGINE_SOURCES CONFIGURE_DEPENDS "${COOPDX_ROOT}/src/engine/*.c")
@@ -101,10 +110,10 @@ if(COOPDX_BUILD_GAME)
     target_include_directories(sm64coopdx BEFORE PRIVATE "${GENERATED}" "${GENERATED}/include")
     target_include_directories(sm64coopdx PRIVATE "${COOPDX_ROOT}/lib/coopnet/include")
     target_compile_options(sm64coopdx PRIVATE -fno-strict-aliasing -include "${CMAKE_CURRENT_SOURCE_DIR}/compat.h" "$<$<COMPILE_LANGUAGE:C>:-Wno-incompatible-pointer-types>" "$<$<COMPILE_LANGUAGE:C>:-Wno-int-conversion>")
-    target_compile_definitions(sm64coopdx PRIVATE DYNOS=1 ENHANCE_LEVEL_TEXTURES=1 MA_NO_RUNTIME_LINKING MA_NO_DEVICE_IO MINIZ_NO_TIME)
+    target_compile_definitions(sm64coopdx PRIVATE STB_VORBIS_BIG_ENDIAN COOPNET=1 DYNOS=1 ENHANCE_LEVEL_TEXTURES=1 MA_NO_RUNTIME_LINKING MA_NO_DEVICE_IO MINIZ_NO_TIME)
     set_source_files_properties("${COOPDX_ROOT}/src/audio/seqplayer.c" PROPERTIES COMPILE_DEFINITIONS BITS_32=1)
     target_compile_features(sm64coopdx PRIVATE cxx_std_17)
-    target_link_libraries(sm64coopdx PRIVATE coopdx_xsdk_platform coopdx_lua coopdx_zlib)
+    target_link_libraries(sm64coopdx PRIVATE coopdx_xsdk_platform coopdx_lua coopdx_zlib coopdx_coopnet)
     # Asset headers may shadow the PC headers; model their dependency explicitly.
     add_custom_command(OUTPUT "${GENERATED}/assets.stamp"
         "${GENERATED}/assets/mario_anim_data.c" "${GENERATED}/assets/demo_data.c"

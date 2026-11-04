@@ -56,7 +56,7 @@ void network_send_collect_coin(struct Object* o) {
     struct Packet p = { 0 };
     packet_init(&p, PACKET_COLLECT_COIN, true, PLMT_LEVEL);
     packet_write(&p, &behaviorId, sizeof(u32));
-    packet_write(&p, &o->oPosX, sizeof(f32) * 3);
+    packet_write_u32s(&p, &o->oPosX, 3);
     packet_write(&p, &gMarioStates[0].numCoins, sizeof(s16));
     packet_write(&p, &o->oDamageOrCoinValue, sizeof(s32));
     packet_write(&p, &gCurrAreaIndex, sizeof(s16));
@@ -74,7 +74,7 @@ void network_receive_collect_coin(struct Packet* p) {
     s16 areaIndex = 0;
 
     packet_read(p, &behaviorId, sizeof(u32));
-    packet_read(p, &pos, sizeof(f32) * 3);
+    packet_read_u32s(p, &pos, 3);
     packet_read(p, &numCoins, sizeof(s16));
     packet_read(p, &coinValue, sizeof(s32));
     packet_read(p, &areaIndex, sizeof(s16));

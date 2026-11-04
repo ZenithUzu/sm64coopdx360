@@ -1,3 +1,4 @@
+#include "packets/packet_wire.h"
 #include "socket/socket.h"
 #include "coopnet/coopnet.h"
 #include <stdio.h>
@@ -313,6 +314,7 @@ void network_send_to(u8 localIndex, struct Packet* p) {
 
     // save inside packet buffer
     u32 hash = packet_hash(p);
+    packet_wire_order(&hash, sizeof(u32));
     memcpy(&p->buffer[p->dataLength], &hash, sizeof(u32));
 
     // redirect to server if required

@@ -57,7 +57,7 @@ void network_send_collect_star(struct Object* o, s16 coinScore, s16 starIndex) {
     packet_write(&p, &gCurrActStarNum,  sizeof(s16));
     packet_write(&p, &gCurrLevelNum,    sizeof(s16));
     packet_write(&p, &gCurrAreaIndex,   sizeof(s16));
-    packet_write(&p, &o->oPosX, sizeof(f32) * 3);
+    packet_write_u32s(&p, &o->oPosX, 3);
     packet_write(&p, &behaviorId, sizeof(u32));
     packet_write(&p, &coinScore,  sizeof(s16));
     packet_write(&p, &starIndex,  sizeof(s16));
@@ -82,7 +82,7 @@ void network_receive_collect_star(struct Packet* p) {
     packet_read(p, &gCurrActStarNum,  sizeof(s16));
     packet_read(p, &gCurrLevelNum,    sizeof(s16));
     packet_read(p, &gCurrAreaIndex,   sizeof(s16));
-    packet_read(p, &pos, sizeof(f32) * 3);
+    packet_read_u32s(p, &pos, 3);
     packet_read(p, &behaviorId, sizeof(u32));
     packet_read(p, &coinScore,  sizeof(s16));
     packet_read(p, &starIndex,  sizeof(s16));

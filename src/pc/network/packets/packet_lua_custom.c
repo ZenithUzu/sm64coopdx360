@@ -200,7 +200,7 @@ void network_send_lua_custom_bytestring(bool broadcast) {
     packet_write(&p, &bytestringLength, sizeof(u16));
 
     // write bytestring
-    packet_write(&p, (char*)bytestring, totalLength);
+    packet_write_bytes(&p, (char*)bytestring, totalLength);
 
     // send packet
     if (broadcast) {
@@ -229,7 +229,7 @@ void network_receive_lua_custom_bytestring(struct Packet* p) {
 
     // read byte string
     static char sBytestring[MAX_BYTESTRING_LENGTH + 1] = "";
-    packet_read(p, &sBytestring, bytestringLength);
+    packet_read_bytes(p, &sBytestring, bytestringLength);
 
     if (p->error) {
         LOG_ERROR("Received malformed lua custom bytestring packet");

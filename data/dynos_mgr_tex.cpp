@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include "dynos.cpp.h"
+#include "dynos_tex_shrink.h"
 extern "C" {
 #include "pc/gfx/gfx.h"
 #include "pc/gfx/gfx_rendering_api.h"
@@ -222,6 +223,24 @@ u8 *DynOS_Tex_ConvertToRGBA32(const u8 *aData, u64 aLength, s32 aFormat, s32 aSi
 typedef struct GfxRenderingAPI GRAPI;
 static void DynOS_Tex_Upload(DataNode<TexData> *aNode, GRAPI *aGfxRApi, s32 aTile, s32 aTexId) {
     aGfxRApi->select_texture(aTile, aTexId);
+#if defined(__XSDK__)
+    if (aNode->mData->mRawData.begin() == NULL && !aNode->mData->mPngData.Empty()) {
+        s32 _Width = 0, _Height = 0, _Components = 0;
+        u8 *_Decoded = stbi_load_from_memory(aNode->mData->mPngData.begin(), aNode->mData->mPngData.Count(), &_Width, &_Height, &_Components, 4);
+        if (_Decoded) {
+            // Texture memory is the console's main memory too.
+            dynos_tex_shrink(_Decoded, &_Width, &_Height, 512);
+            aGfxRApi->upload_texture(_Decoded, _Width, _Height);
+            stbi_image_free(_Decoded);
+        } else {
+            static const u8 sWhite[4] = { 255, 255, 255, 255 };
+            PrintError("Could not decode texture: %s", aNode->mName.begin());
+            aGfxRApi->upload_texture(sWhite, 1, 1);
+        }
+        aNode->mData->mUploaded = true;
+        return;
+    }
+#endif
     aGfxRApi->upload_texture(aNode->mData->mRawData.begin(), aNode->mData->mRawWidth, aNode->mData->mRawHeight);
     aNode->mData->mUploaded = true;
 }

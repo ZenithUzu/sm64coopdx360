@@ -161,7 +161,8 @@ static void packet_write_object_full_sync(struct Packet* p, struct Object* o) {
     if (!so || !so->fullObjectSync) { return; }
 
     // write all of raw data
-    packet_write(p, o->rawData.asU32, sizeof(u32) * OBJECT_NUM_FIELDS);
+    // shortcut: s16 pairs in rawData swap halves between byte orders, fix per field if a synced one misbehaves.
+    packet_write_u32s(p, o->rawData.asU32, OBJECT_NUM_FIELDS);
 }
 
 static void packet_read_object_full_sync(struct Packet* p, struct Object* o) {
@@ -169,7 +170,7 @@ static void packet_read_object_full_sync(struct Packet* p, struct Object* o) {
     if (!so || !so->fullObjectSync) { return; }
 
     // read all of raw data
-    packet_read(p, o->rawData.asU32, sizeof(u32) * OBJECT_NUM_FIELDS);
+    packet_read_u32s(p, o->rawData.asU32, OBJECT_NUM_FIELDS);
 }
 
 // ----- standard fields ----- //
@@ -183,7 +184,7 @@ static void packet_write_object_standard_fields(struct Packet* p, struct Object*
     if (!so->hasStandardFields) { return; }
 
     // write the standard fields
-    packet_write(p, &o->oPosX, sizeof(u32) * 7);
+    packet_write_u32s(p, &o->oPosX, 7);
     packet_write(p, &o->oAction, sizeof(u32));
     packet_write(p, &o->oPrevAction, sizeof(u32));
     packet_write(p, &o->oSubAction, sizeof(u32));
@@ -205,7 +206,7 @@ static void packet_read_object_standard_fields(struct Packet* p, struct Object* 
     if (!so->hasStandardFields) { return; }
 
     // read the standard fields
-    packet_read(p, &o->oPosX, sizeof(u32) * 7);
+    packet_read_u32s(p, &o->oPosX, 7);
     packet_read(p, &o->oAction, sizeof(u32));
     packet_read(p, &o->oPrevAction, sizeof(u32));
     packet_read(p, &o->oSubAction, sizeof(u32));
@@ -226,7 +227,7 @@ static void packet_write_object_extra_fields(struct Packet* p, struct Object* o)
     if (so->maxSyncDistance == SYNC_DISTANCE_ONLY_DEATH) { return; }
 
     // write the count
-    packet_write(p, &so->extraFieldCount, sizeof(u8));
+    packet_write_u8(p, so->extraFieldCount);
 
     // write the extra field
     for (u8 i = 0; i < so->extraFieldCount; i++) {

@@ -383,6 +383,11 @@ void djui_interactable_update_pad(void) {
             case PAD_HOLD_DIR_RIGHT: pad->stick_x =  64; pad->stick_y =   0; break;
             default: break;
         }
+#if defined(__XSDK__)
+    } else if (gInteractableFocus == NULL) {
+        // The stick moves the menu cursor here; the d-pad still steps between options.
+        padHoldDirection = PAD_HOLD_DIR_NONE;
+#endif
     } else if (pad->stick_x == 0 && pad->stick_y == 0) {
         padHoldDirection = PAD_HOLD_DIR_NONE;
     } else if (abs(pad->stick_x) > abs(pad->stick_y)) {
@@ -447,6 +452,14 @@ void djui_interactable_update(void) {
             // pressed main face button
             if (!gDjuiChatBoxFocus) {
                 djui_interactable_set_input_focus(NULL);
+#if defined(__XSDK__)
+                // Otherwise this same press of A takes the focus straight back.
+                if (padButtons & PAD_BUTTON_A) {
+                    sIgnoreInteractableUntilCursorReleased = true;
+                    padButtons &= ~PAD_BUTTON_A;
+                    mouseButtons &= ~L_MOUSE_BUTTON;
+                }
+#endif
             }
         } else {
             djui_interactable_on_focus(gInteractableFocus);

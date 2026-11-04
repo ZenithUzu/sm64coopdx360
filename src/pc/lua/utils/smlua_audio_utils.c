@@ -192,11 +192,41 @@ static bool sModAudioShuttingDown = false;
 static void smlua_audio_custom_init(void) {
     sModAudioPool = dynamic_pool_init();
 
+#if defined(__XSDK__)
+    // The console has no Miniaudio device: buffer_audio mixes the engine into the game's output.
+    ma_engine_config config = ma_engine_config_init();
+    config.noDevice = MA_TRUE;
+    config.channels = 2;
+    config.sampleRate = 32000;
+    ma_result result = ma_engine_init(&config, &sModAudioEngine);
+#else
     ma_result result = ma_engine_init(NULL, &sModAudioEngine);
+#endif
     if (result != MA_SUCCESS) {
         LOG_ERROR("failed to init Miniaudio: %d", result);
     }
 }
+
+#if defined(__XSDK__)
+void smlua_audio_custom_mix(s16 *output, u32 frames, bool mute) {
+    static f32 sMix[4096 * 2];
+    if (!sModAudioPool) { return; }
+    while (frames > 0) {
+        const u32 chunk = MIN(frames, 4096);
+        ma_uint64 read = 0;
+        // Read even when muted, so mod audio keeps its place.
+        if (ma_engine_read_pcm_frames(&sModAudioEngine, sMix, chunk, &read) != MA_SUCCESS || read == 0) { return; }
+        if (!mute) {
+            for (u32 i = 0; i < (u32)read * 2; i++) {
+                const s32 sample = (s32)output[i] + (s32)(sMix[i] * 32767.0f);
+                output[i] = (s16)(sample > 32767 ? 32767 : sample < -32768 ? -32768 : sample);
+            }
+        }
+        output += read * 2;
+        frames -= (u32)read;
+    }
+}
+#endif
 
 static struct ModAudio* find_mod_audio(const char *filepath) {
     struct DynamicPoolNode* node = sModAudioPool->tail;

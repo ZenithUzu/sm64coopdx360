@@ -1,3 +1,4 @@
+#include "dynos_cmd_order.h"
 #include "dynos.cpp.h"
 extern "C" {
 #include "sm64.h"
@@ -527,13 +528,15 @@ void DynOS_Geo_Load(BinFile *aFile, GfxData *aGfxData) {
     // Data
     _Node->mSize = aFile->Read<u32>();
     _Node->mData = New<GeoLayout>(_Node->mSize);
+    struct DynosCmdOrder _Order = { NULL };
     for (u32 i = 0; i != _Node->mSize; ++i) {
         u32 _Value = aFile->Read<u32>();
+        const u32 _Word = dynos_cmd_order_word(&_Order, _Value, 0);
         void *_Ptr = DynOS_Pointer_Load(aFile, aGfxData, _Value, FUNCTION_GEO, &_Node->mFlags);
         if (_Ptr) {
             _Node->mData[i] = (uintptr_t) _Ptr;
         } else {
-            _Node->mData[i] = (uintptr_t) _Value;
+            _Node->mData[i] = (uintptr_t) _Word;
         }
     }
 

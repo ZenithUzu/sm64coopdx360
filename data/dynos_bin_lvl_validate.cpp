@@ -52,7 +52,11 @@ static void LvlCmd_Add(LevelScript script[], size_t size) {
     }
 
     // extract the id and make sure it's unique
+#if IS_BIG_ENDIAN
+    u8 id = (u8)(script[0] >> 24);
+#else
     u8 id = (u8)(script[0] & 0xFF);
+#endif
     if (sCommandMap.count(id) != 0) { return; }
 
     // add the command to the map

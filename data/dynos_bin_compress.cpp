@@ -180,7 +180,9 @@ static BinFile *DynOS_Bin_Decompress_ModFs(const SysPath &aFilename) {
 
     // Compare with magic constant
     // If not equal, it's not a compressed file
-    u64 _Magic = ((u64 *) _Buffer)[0];
+    u64 _Magic = 0;
+    memcpy(&_Magic, _Buffer, sizeof(u64));
+    packet_wire_order(&_Magic, sizeof(u64));
     if (_Magic != DYNOS_BIN_COMPRESS_MAGIC) {
         BinFile *_BinFile = BinFile::OpenB(sBufferCompressed, sLengthCompressed);
         DynOS_Bin_Compress_Free();
@@ -189,7 +191,8 @@ static BinFile *DynOS_Bin_Decompress_ModFs(const SysPath &aFilename) {
     PrintNoNewLine("Decompressing file \"%s\"...", aFilename.c_str());
 
     // Read expected uncompressed file size
-    sLengthUncompressed = ((u64 *) _Buffer)[1];
+    memcpy(&sLengthUncompressed, (u8 *) _Buffer + sizeof(u64), sizeof(u64));
+    packet_wire_order(&sLengthUncompressed, sizeof(u64));
     sLengthCompressed -= _LengthHeader;
     u8 *_BufferCompressed = sBufferCompressed + _LengthHeader;
 
@@ -239,6 +242,7 @@ BinFile *DynOS_Bin_Decompress(const SysPath &aFilename) {
         f_read(&_Magic, sizeof(u64), 1, sFile) == 1,
         __FUNCTION__, aFilename.c_str(), "Cannot read magic"
     )) return NULL;
+    packet_wire_order(&_Magic, sizeof(u64));
 
     // Compare with magic constant
     // If not equal, it's not a compressed file
@@ -253,6 +257,7 @@ BinFile *DynOS_Bin_Decompress(const SysPath &aFilename) {
         f_read(&sLengthUncompressed, sizeof(u64), 1, sFile) == 1,
         __FUNCTION__, aFilename.c_str(), "Cannot read uncompressed file size"
     )) return NULL;
+    packet_wire_order(&sLengthUncompressed, sizeof(u64));
 
     // Retrieve file length
     if (!DynOS_Bin_Compress_Check(

@@ -19,6 +19,28 @@ jobs:
         run: |
           cc -std=c99 -Wall -Wextra -Werror -Isrc/pc/gfx platform/xsdk/tests/combiner_test.c -o /tmp/combiner_test
           /tmp/combiner_test
+      - name: Test network wire order
+        run: |
+          cc -std=c99 -Wall -Wextra -Werror -Isrc/pc/network/packets platform/xsdk/tests/packet_wire_test.c -o /tmp/packet_wire_test
+          /tmp/packet_wire_test
+      - name: Test DynOS command conversion
+        run: |
+          cc -std=c99 -Wall -Wextra -Werror -Idata -Isrc platform/xsdk/tests/dynos_cmd_order_test.c -o /tmp/dynos_cmd_order_test
+          /tmp/dynos_cmd_order_test
+      - name: Test DynOS texture shrinking
+        run: |
+          cc -std=c99 -Wall -Wextra -Werror -Idata platform/xsdk/tests/dynos_tex_shrink_test.c -o /tmp/dynos_tex_shrink_test
+          /tmp/dynos_tex_shrink_test
+      - name: Test mod path checks
+        run: |
+          cc -std=c99 -Wall -Wextra -Werror -Isrc/pc/network/packets platform/xsdk/tests/packet_safe_path_test.c -o /tmp/packet_safe_path_test
+          /tmp/packet_safe_path_test
+      - name: Test the display LUT curve
+        run: |
+          cc -std=c99 -Wall -Wextra -Werror -Isrc/pc/gfx platform/xsdk/tests/gfx_xsdk_lut_test.c -lm -o /tmp/gfx_xsdk_lut_test
+          /tmp/gfx_xsdk_lut_test
+      - name: Test the DynOS pack tool
+        run: python3 platform/xsdk/tests/port_dynos_pack_test.py
       - name: Test level command field widths
         run: |
           cc -std=c99 -Wall -Wextra -Werror -D_LANGUAGE_C -DF3DEX_GBI_2E -Iinclude -I. platform/xsdk/tests/level_script_read_test.c -o /tmp/level_script_test

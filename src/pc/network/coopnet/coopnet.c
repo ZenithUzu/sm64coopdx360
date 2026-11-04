@@ -9,6 +9,10 @@
 #include "pc/mods/mods.h"
 #include "pc/utils/misc.h"
 #include "pc/debuglog.h"
+#if defined(__XSDK__)
+#include <unistd.h>
+#include "pc/configfile.h"
+#endif
 #ifdef DISCORD_SDK
 #include "pc/discord/discord.h"
 #endif
@@ -28,11 +32,21 @@ static bool sReconnecting = false;
 
 static CoopNetRc coopnet_initialize(void);
 
+static const char* coopnet_game_name(void) {
+#if defined(__XSDK__)
+    // The official server groups lobbies by this name, and the console plays with the Android ones. On a private
+    // server it stays the PC's, so both see each other. shortcut: 172.16/12 counts as public, add it if one is used.
+    const char* ip = configCoopNetIp;
+    if (strncmp(ip, "192.168.", 8) && strncmp(ip, "10.", 3) && strncmp(ip, "127.", 4)) { return "sm64coop-android"; }
+#endif
+    return GAME_NAME;
+}
+
 bool ns_coopnet_query(QueryCallbackPtr callback, QueryFinishCallbackPtr finishCallback, const char* password) {
     gCoopNetCallbacks.OnLobbyListGot = callback;
     gCoopNetCallbacks.OnLobbyListFinish = finishCallback;
     if (coopnet_initialize() != COOPNET_OK) { return false; }
-    if (coopnet_lobby_list_get(GAME_NAME, password) != COOPNET_OK) { return false; }
+    if (coopnet_lobby_list_get(coopnet_game_name(), password) != COOPNET_OK) { return false; }
     return true;
 }
 
@@ -103,6 +117,7 @@ static void coopnet_on_lobby_left(uint64_t lobbyId, uint64_t userId) {
 }
 
 static void coopnet_on_error(enum MPacketErrorNumber error, uint64_t tag) {
+    LOG_ERROR("CoopNet error %d, tag %" PRIu64 "", error, tag);
     switch (error) {
         case MERR_COOPNET_VERSION:
             djui_popup_create(DLANG(NOTIF, COOPNET_VERSION), 2);
@@ -212,12 +227,30 @@ void ns_coopnet_update(void) {
             if (sReconnecting) {
                 LOG_INFO("Update lobby");
                 coopnet_populate_description();
-                coopnet_lobby_update(sLocalLobbyId, GAME_NAME, get_version(), configPlayerName, mode, sCoopNetDescription);
+                coopnet_lobby_update(sLocalLobbyId, coopnet_game_name(), get_version(), configPlayerName, mode, sCoopNetDescription);
             } else {
                 LOG_INFO("Create lobby");
+#if defined(__XSDK__)
+                // CoopNet lists a lobby without a password for everyone: the console's are always private.
+                if (configPassword[0] == '\0') {
+                    static const char letters[] = "abcdefghjkmnpqrstuvwxyz23456789";
+                    u8 random[10];
+                    if (getentropy(random, sizeof(random)) != 0) {
+                        LOG_ERROR("No randomness for a lobby password!");
+                        network_shutdown(false, false, false, false);
+                        return;
+                    }
+                    for (u32 i = 0; i < sizeof(random); i++) { configPassword[i] = letters[random[i] % (sizeof(letters) - 1)]; }
+                    configPassword[sizeof(random)] = '\0';
+                    configfile_save(configfile_name());
+                    char message[96];
+                    snprintf(message, sizeof(message), "Partida privada, clave: %s", configPassword);
+                    djui_popup_create(message, 2);
+                }
+#endif
                 snprintf(gCoopNetPassword, 64, "%s", configPassword);
                 coopnet_populate_description();
-                coopnet_lobby_create(GAME_NAME, get_version(), configPlayerName, mode, (uint16_t)configAmountOfPlayers, gCoopNetPassword, sCoopNetDescription);
+                coopnet_lobby_create(coopnet_game_name(), get_version(), configPlayerName, mode, (uint16_t)configAmountOfPlayers, gCoopNetPassword, sCoopNetDescription);
             }
         } else if (sNetworkType == NT_CLIENT) {
             LOG_INFO("Join lobby");

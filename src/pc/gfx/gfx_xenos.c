@@ -14,7 +14,7 @@
 #include "coopdx_shaders.h"
 #include "material_shaders.h"
 
-enum { VERTEX_WORDS = 48, VERTEX_CAPACITY = 4096, ARENA_VERTICES = 32768 };
+enum { VERTEX_WORDS = 48, VERTEX_CAPACITY = 4096, ARENA_CHUNKS = 8, CHUNK_VERTICES = 8192 };
 struct ShaderProgram { uint64_t hash; struct CCFeatures features; struct CombineMode mode; uint8_t commands[16]; int material; };
 struct Texture { XsdkTexture image; XsdkSamplerState sampler; bool ready; };
 static struct ShaderProgram programs[CC_MAX_SHADERS], *current;
@@ -30,9 +30,12 @@ static bool material_ready[MATERIAL_COUNT];
 static unsigned stat_specialized, noise_frame;
 static volatile uint32_t *vertices;
 static size_t vertex_cursor;
+static unsigned chunk_index, chunk_retired[ARENA_CHUNKS];
+static uint32_t chunk_fences[ARENA_CHUNKS];
+static bool chunk_pending[ARENA_CHUNKS];
 static XsdkTexture retired[64];
 static unsigned retired_count, stat_draws, stat_uploads, stat_waits;
-static uint64_t retired_bytes, stat_wait_ns, stat_upload_ns;
+static uint64_t retired_bytes, stat_wait_ns, stat_upload_ns, stat_vertices, stat_copy_ns;
 static XsdkTexture white;
 static XsdkSamplerState white_sampler;
 static uint32_t width, height;
@@ -48,6 +51,33 @@ static void wait_gpu(void) {
     // All commands referencing retired allocations have now finished.
     for (unsigned i=0; i<retired_count; ++i) xsdk_texture_free(&retired[i]);
     retired_count = 0; retired_bytes = 0;
+    memset(chunk_pending, 0, sizeof chunk_pending);
+    memset(chunk_retired, 0, sizeof chunk_retired);
+}
+// Moves on to the next chunk of the arena, waiting only for that chunk's last draws: waiting for
+// the whole queue here stalled every frame or two with frames in flight.
+static void next_chunk(void) {
+    chunk_fences[chunk_index] = xsdk_gpu_fence();
+    chunk_pending[chunk_index] = true;
+    chunk_retired[chunk_index] = retired_count;
+    chunk_index = (chunk_index + 1) % ARENA_CHUNKS;
+    vertex_cursor = (size_t)chunk_index * CHUNK_VERTICES;
+    if (!chunk_pending[chunk_index]) return;
+    if (!xsdk_gpu_fence_done(chunk_fences[chunk_index])) {
+        uint64_t before = SDL_GetTicksNS();
+        checked(xsdk_gpu_wait(chunk_fences[chunk_index], 5000), "GPU fence timed out");
+        stat_wait_ns += SDL_GetTicksNS() - before; ++stat_waits;
+    }
+    chunk_pending[chunk_index] = false;
+    // Textures retired before that fence can't be read by anything still queued.
+    const unsigned safe = chunk_retired[chunk_index];
+    for (unsigned i=0; i<safe; ++i) { retired_bytes -= retired[i].size_bytes; xsdk_texture_free(&retired[i]); }
+    memmove(retired, retired+safe, (retired_count-safe)*sizeof *retired);
+    retired_count -= safe;
+    for (unsigned i=0; i<ARENA_CHUNKS; ++i) chunk_retired[i] = chunk_retired[i] > safe ? chunk_retired[i]-safe : 0;
+}
+static inline void put_words(volatile uint32_t *out, const float *src, unsigned count) {
+    for (unsigned i=0; i<count; ++i) { uint32_t word; memcpy(&word, src+i, sizeof word); out[i]=word; }
 }
 static bool z_range(void) { return true; }
 static void unload(struct ShaderProgram *old) { (void)old; current = NULL; }
@@ -62,8 +92,15 @@ static struct ShaderProgram *create(struct ColorCombiner *cc) {
         p = program_count < CC_MAX_SHADERS ? &programs[program_count++] : &programs[program_next++ % CC_MAX_SHADERS]; p->hash = cc->hash; p->mode = cc->cm;
         memcpy(p->commands, cc->shader_commands, sizeof p->commands);
         p->material=-1;
+        // One-cycle materials never run the second cycle, so its commands can't change the result.
+        const size_t compared=p->mode.use_2cycle ? 16 : 8;
         for (unsigned i=0;i<MATERIAL_COUNT;++i) {
-            if (memcmp(p->commands,material_definitions[i].commands,16)==0) {p->material=(int)i;break;}
+            if (memcmp(p->commands,material_definitions[i].commands,compared)==0) {p->material=(int)i;break;}
+        }
+        if (p->material<0) {
+            char text[16*3+1]; size_t used=0;
+            for (unsigned i=0;i<16;++i) used+=(size_t)snprintf(text+used,sizeof text-used,"%u ",p->commands[i]);
+            xsdk_log_write("material miss: 2cycle %u commands %s",(unsigned)p->mode.use_2cycle,text);
         }
         gfx_cc_get_features(cc, &p->features);
         if (p->features.num_inputs > 8) fail("more than eight combiner inputs");
@@ -125,8 +162,8 @@ static void begin(void) {
     static uint64_t last;
     uint64_t now = SDL_GetTicksNS();
     if (now - last >= 5000000000ULL) {
-        xsdk_log_write("render stats: draws %u specialized %u uploads %u upload_ms %u waits %u wait_ms %u", stat_draws, stat_specialized, stat_uploads, (unsigned)(stat_upload_ns/1000000), stat_waits, (unsigned)(stat_wait_ns/1000000));
-        stat_draws=stat_uploads=stat_waits=stat_specialized=0; stat_upload_ns=stat_wait_ns=0; last=now;
+        xsdk_log_write("render stats: draws %u specialized %u vertices %u copy_ms %u uploads %u upload_ms %u waits %u wait_ms %u", stat_draws, stat_specialized, (unsigned)stat_vertices, (unsigned)(stat_copy_ns/1000000), stat_uploads, (unsigned)(stat_upload_ns/1000000), stat_waits, (unsigned)(stat_wait_ns/1000000));
+        stat_draws=stat_uploads=stat_waits=stat_specialized=0; stat_upload_ns=stat_wait_ns=stat_vertices=stat_copy_ns=0; last=now;
     }
     // Keep sin() inputs small: the noise only needs to change between frames.
     noise_frame = (noise_frame + 1) % 150;
@@ -156,30 +193,29 @@ static void draw(float data[], size_t count, size_t triangles) {
     size_t n = triangles * 3;
     if (count != n * stride) fail("engine vertex layout mismatch");
     // Append batches without a CPU/GPU round trip. Fence only before reusing
-    // the arena, so every queued draw retains its own vertex data.
-    if (vertex_cursor + n > ARENA_VERTICES) {
-        wait_gpu();
-        vertex_cursor = 0;
-    }
+    // a chunk, so every queued draw retains its own vertex data.
+    if (vertex_cursor + n > (size_t)(chunk_index + 1) * CHUNK_VERTICES) next_chunk();
     volatile uint32_t *batch = vertices + vertex_cursor * VERTEX_WORDS;
     vertex_cursor += n;
+    const uint64_t copy_start = SDL_GetTicksNS();
     const float *src = data;
+    const unsigned components = current->mode.use_alpha ? 4 : 3;
+    const unsigned inputs = (unsigned)current->features.num_inputs;
+    // Only what this material reads: its shader ignores the attributes left stale in the arena.
     for (size_t v = 0; v < n; v++) {
-        float packed[VERTEX_WORDS] = {0};
-        memcpy(packed, src, 4*sizeof(float)); src += 4;
+        volatile uint32_t *out = batch + v*VERTEX_WORDS;
+        put_words(out, src, 4); src += 4;
         for (unsigned t=0; t<2; t++) if (current->features.used_textures[t]) {
-            memcpy(packed+4+2*t, src, 2*sizeof(float)); src += 2;
+            put_words(out+4+2*t, src, 2); src += 2;
         }
-        if (current->mode.use_fog) { memcpy(packed+8, src, 4*sizeof(float)); src += 4; }
-        if (current->mode.light_map) { memcpy(packed+12, src, 2*sizeof(float)); src += 2; }
-        for (int i=0; i<8 && i<current->features.num_inputs; i++) {
-            unsigned components = current->mode.use_alpha ? 4 : 3;
-            memcpy(packed+16+4*i, src, components*sizeof(float)); src += components;
-            if (components == 3) packed[16+4*i+3] = 1;
+        if (current->mode.use_fog) { put_words(out+8, src, 4); src += 4; }
+        if (current->mode.light_map) { put_words(out+12, src, 2); src += 2; }
+        for (unsigned i=0; i<inputs; i++) {
+            put_words(out+16+4*i, src, components); src += components;
+            if (components == 3) out[16+4*i+3] = 0x3F800000; // 1.0f
         }
-        uint32_t words[VERTEX_WORDS]; memcpy(words, packed, sizeof words);
-        for (unsigned j=0; j<VERTEX_WORDS; j++) batch[v*VERTEX_WORDS+j] = words[j];
     }
+    stat_copy_ns += SDL_GetTicksNS() - copy_start; stat_vertices += n;
     const uint32_t bytes = (uint32_t)(n * VERTEX_WORDS * 4);
     xsdk_gpu_invalidate(xsdk_gpu_address(batch), bytes);
     const XsdkBuiltShader *built=&coopdx_frag;
@@ -228,8 +264,8 @@ static void draw(float data[], size_t count, size_t triangles) {
     XsdkRaster raster = {0}; XsdkRasterState rs;
     // Xenos takes normalized depth bias; OpenGL takes integer depth-buffer units.
     raster.depth_bias=decal ? -2.0f / 16777215.0f : 0;
-    // The slope term is per pixel: at half resolution, -1 keeps the world-space offset of -2 at 720p.
-    raster.depth_bias_slope=decal ? -1 : 0;
+    // The slope term is per pixel: scale it to keep the world-space offset of -2 at 720p.
+    raster.depth_bias_slope=decal ? -2.0f*(float)width/1280.0f : 0;
     xsdk_gpu_raster_state(&rs, &raster); xsdk_gpu_set_raster(&rs);
     xsdk_gpu_set_viewport(viewport[0], (float)height-viewport[1]-viewport[3], viewport[2], viewport[3], 0, 1);
     int x=scissor[0], y=(int)height-scissor[1]-scissor[3], w=scissor[2], h=scissor[3];
@@ -245,6 +281,10 @@ static void draw(float data[], size_t count, size_t triangles) {
 // The game uses a smaller render target. XAM always receives the full 720p
 // front buffer, so opening the Guide doesn't change the display's mode or layout.
 void gfx_xenos_present(uint32_t address, uint32_t output_width, uint32_t output_height) {
+    if (scene_texture.width==output_width && scene_texture.height==output_height) {
+        xsdk_gpu_resolve(address,output_width,output_height,0xFF000000);
+        return;
+    }
     // Neither copy clears: the 720p target's depth overlaps the game target's color.
     xsdk_gpu_set_resolve_clears(false,false);
     xsdk_gpu_resolve_texture(&scene_texture,0xFF000000);
@@ -280,7 +320,7 @@ static void init(void) {
     for (unsigned i=0; i<12; i++) { layout[i].usage=i==0 ? XSDK_USAGE_POSITION : i==1 ? XSDK_USAGE_COLOR : XSDK_USAGE_TEXCOORD; layout[i].usage_index=i<2 ? 0 : i-2; layout[i].format=XSDK_VERTEX_FLOAT4; layout[i].offset_bytes=i*16; }
     const uint32_t stride = VERTEX_WORDS*4;
     checked(xsdk_shader_set_vertex_layout(&vertex_shader,layout,12,&stride), "vertex layout");
-    vertices=xsdk_gpu_alloc(ARENA_VERTICES*VERTEX_WORDS*4);
+    vertices=xsdk_gpu_alloc(ARENA_CHUNKS*CHUNK_VERTICES*VERTEX_WORDS*4);
     vertex_cursor = 0;
     if (!vertices) fail("vertex allocation");
     checked(xsdk_texture_create(&white,XSDK_FORMAT_R8G8B8A8,1,1,1,true),"fallback texture");

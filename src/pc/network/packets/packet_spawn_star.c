@@ -18,8 +18,8 @@ void network_send_spawn_star(struct Object* o, u8 starType, f32 x, f32 y, f32 z,
     packet_write(&p, &behParams, sizeof(u32));
     packet_write(&p, &networkPlayerIndex, sizeof(u8));
 
-    packet_write(&p, &o->oPosX, sizeof(u32) * 3);
-    packet_write(&p, &o->oHomeX, sizeof(u32) * 3);
+    packet_write_u32s(&p, &o->oPosX, 3);
+    packet_write_u32s(&p, &o->oHomeX, 3);
 
     network_send(&p);
 }
@@ -54,8 +54,8 @@ void network_receive_spawn_star(struct Packet* p) {
     gCurrentObject = oldObject;
 
     if (o != NULL) {
-        packet_read(p, &o->oPosX, sizeof(u32) * 3);
-        packet_read(p, &o->oHomeX, sizeof(u32) * 3);
+        packet_read_u32s(p, &o->oPosX, 3);
+        packet_read_u32s(p, &o->oHomeX, 3);
 
         // Here we check if we're supposed to play the cutscene or not depending on if
         // the global player index sent matches us.

@@ -7,11 +7,49 @@
 #include "xsdk/log.h"
 #include "gfx_xsdk.h"
 #include "gfx_xenos.h"
+#include "gfx_xsdk_lut.h"
+#include "pc/configfile.h"
 #include "platform/xsdk/keyboard_xsdk.h"
 #include "platform/xsdk/input_usb.h"
 
 static uint32_t width, height, native_width, native_height, frame_address;
+static uint64_t stat_wait_ns, stat_cpu_ns, frame_begin_ns;
+static unsigned stat_frames;
 static bool running, frame_pending, gpu_open, display_open, events_open;
+// The display LUT, by register index (docs/HARDWARE.md in xSDK): each colour write moves the index on.
+static volatile uint32_t *const display_registers = (volatile uint32_t *)0x7FC80000;
+enum { LUT_RW_MODE = 0x1921, LUT_RW_INDEX = 0x1922, LUT_COLOR = 0x1925, LUT_WRITE_MASK = 0x1927 };
+// xSDK leaves a linear LUT, with no adjustment for the screen: the player sets it in the display options.
+void gfx_xsdk_apply_output_levels(void) {
+    if (!display_open) return;
+    display_registers[LUT_RW_MODE] = 0;
+    display_registers[LUT_WRITE_MASK] = 7;
+    display_registers[LUT_RW_INDEX] = 0;
+    for (unsigned i = 0; i < 256; i++) {
+        const uint32_t v = gfx_xsdk_lut_value(i, configXboxOutputGamma, configXboxLimitedRange);
+        display_registers[LUT_COLOR] = (v << 20) | (v << 10) | v;
+    }
+}
+// XAM loads its own LUT for the Guide: log it, since it shows the levels the console's own screens use, then put ours back.
+static void restore_levels_after_guide(void) {
+    static uint32_t last_system_frames, frame;
+    static bool guide_seen;
+    if (++frame % 30) return;
+    XsdkPresentStats p;
+    xsdk_present_stats(&p);
+    if (p.system_frames != last_system_frames) { last_system_frames = p.system_frames; guide_seen = true; return; }
+    if (!guide_seen) return;
+    guide_seen = false;
+    static const unsigned samples[5] = { 0, 16, 128, 235, 255 };
+    uint32_t lut[5];
+    display_registers[LUT_RW_MODE] = 0;
+    for (unsigned i = 0; i < 5; i++) {
+        display_registers[LUT_RW_INDEX] = samples[i];
+        lut[i] = display_registers[LUT_COLOR];
+    }
+    xsdk_log_write("display: Guide LUT at 0,16,128,235,255: %08X %08X %08X %08X %08X", (unsigned)lut[0], (unsigned)lut[1], (unsigned)lut[2], (unsigned)lut[3], (unsigned)lut[4]);
+    gfx_xsdk_apply_output_levels();
+}
 static void close_window(void) {
     running = false;
     if (display_open) { xsdk_present_close(); display_open = false; }
@@ -32,12 +70,13 @@ static void init(const char *title) {
     NTSTATUS status = xsdk_gpu_open();
     if (!NT_SUCCESS(status)) fatal("gpu_open", status);
     gpu_open = true;
-    status = xsdk_present_open(XSDK_DISPLAY_720P, 2, 1, &width, &height);
+    // Three buffers: with two, a frame that misses one vblank waits for the next, locking to 30 FPS.
+    status = xsdk_present_open(XSDK_DISPLAY_720P, 3, 1, &width, &height);
     if (!NT_SUCCESS(status)) fatal("present_open", status);
     display_open = true;
+    gfx_xsdk_apply_output_levels();
     xsdk_log_write("render mode: Guide-compatible 720p %ux%u", width, height);
     native_width=width;native_height=height;
-    width/=2;height/=2;
     xsdk_log_write("render scale: game %ux%u, presentation %ux%u",width,height,native_width,native_height);
     running = true;
 }
@@ -59,24 +98,32 @@ static bool start_frame(void) {
     // rendering_init submits a clear before the first displayed game frame.
     // Multiple display lists may share one acquired buffer until swap_end.
     if (frame_pending) return true;
+    const uint64_t wait_start = SDL_GetTicksNS();
     NTSTATUS status = xsdk_present_begin(&frame_address, 5000);
+    frame_begin_ns = SDL_GetTicksNS();
+    stat_wait_ns += frame_begin_ns - wait_start;
     if (!NT_SUCCESS(status)) { fprintf(stderr, "xSDK present_begin: 0x%08X\n", (unsigned)status); running = false; return false; }
     frame_pending = true;
     return true;
 }
 // Rendering writes eDRAM; presentation resolves it to a paced front buffer.
 static void swap_begin(void) {
-    if (frame_pending) gfx_xenos_present(frame_address, native_width, native_height);
+    if (frame_pending) {
+        stat_cpu_ns += SDL_GetTicksNS() - frame_begin_ns; ++stat_frames;
+        gfx_xenos_present(frame_address, native_width, native_height);
+    }
 }
 static void swap_end(void) {
     if (frame_pending) {
         xsdk_present_end(); frame_pending = false;
+        restore_levels_after_guide();
         static uint64_t last_report;
         uint64_t now = SDL_GetTicksNS();
         if (now - last_report >= 5000000000ULL) {
             XsdkPresentStats p; XsdkGpuStats g;
             xsdk_present_stats(&p); xsdk_gpu_stats(&g);
-            xsdk_log_write("present: flips %u swaps %u landed %u system %u missed %u", p.flips, g.swaps, g.swap_fence_landed, p.system_frames, p.missed);
+            xsdk_log_write("present: flips %u swaps %u landed %u system %u missed %u frames %u cpu_ms %.2f wait_ms %.2f", p.flips, g.swaps, g.swap_fence_landed, p.system_frames, p.missed, stat_frames, stat_frames ? (double)stat_cpu_ns/1000000.0/stat_frames : 0.0, stat_frames ? (double)stat_wait_ns/1000000.0/stat_frames : 0.0);
+            stat_frames = 0; stat_cpu_ns = stat_wait_ns = 0;
             last_report = now;
         }
     }

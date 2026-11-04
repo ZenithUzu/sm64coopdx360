@@ -1,4 +1,6 @@
 #if defined(__XSDK__)
+#include "controller_mouse.h"
+#include "pc/gfx/gfx_xsdk.h"
 #include <math.h>
 #include "xsdk/xam.h"
 #include "platform/xsdk/keyboard_xsdk.h"
@@ -106,5 +108,34 @@ static void shutdown(void) {
     if(initialized) SDL_QuitSubSystem(SDL_INIT_GAMEPAD);
     initialized=false;
 }
+// Menus only (djui_cursor calls it with a panel open): the left stick moves the cursor and A clicks.
+void controller_xsdk_menu_cursor(void) {
+    static u64 last_ns;
+    static float rest_x, rest_y;
+    const u64 now_ns = SDL_GetTicksNS();
+    float seconds = (float)(now_ns - last_ns) / 1000000000.0f;
+    last_ns = now_ns;
+    if (seconds > 0.1f) seconds = 0.1f;
+    if (!gamepad || configDisableGamepads || xsdk_keyboard_busy() || xsdk_system_ui_open()) return;
+    float axis[2] = { SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_LEFTX) / 32767.0f,
+                      SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_LEFTY) / 32767.0f };
+    for (unsigned i = 0; i < 2; i++) {
+        const float size = axis[i] < 0 ? -axis[i] : axis[i];
+        const float live = size > 0.25f ? (size - 0.25f) / 0.75f : 0;
+        axis[i] = (axis[i] < 0 ? -1 : 1) * live * live * 1100.0f * seconds; // squared: slow near the center
+    }
+    rest_x += axis[0]; rest_y += axis[1];
+    const int move_x = (int)rest_x, move_y = (int)rest_y;
+    rest_x -= (float)move_x; rest_y -= (float)move_y;
+    u32 width, height;
+    gfx_xsdk.get_dimensions(&width, &height);
+    mouse_window_x += move_x; mouse_window_y += move_y;
+    if (mouse_window_x < 0) mouse_window_x = 0;
+    if (mouse_window_y < 0) mouse_window_y = 0;
+    if (mouse_window_x >= (int)width) mouse_window_x = (int)width - 1;
+    if (mouse_window_y >= (int)height) mouse_window_y = (int)height - 1;
+    if (SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_SOUTH)) mouse_window_buttons |= L_MOUSE_BUTTON;
+}
+
 struct ControllerAPI controller_xsdk={0x1000,init,read_pad,rawkey,rumble,stop,reconfigure,shutdown};
 #endif

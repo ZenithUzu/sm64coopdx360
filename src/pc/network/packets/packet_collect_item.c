@@ -49,7 +49,7 @@ void network_send_collect_item(struct Object* o) {
     struct Packet p = { 0 };
     packet_init(&p, PACKET_COLLECT_ITEM, true, PLMT_AREA);
     packet_write(&p, &behaviorId, sizeof(u32));
-    packet_write(&p, &o->oPosX, sizeof(f32) * 3);
+    packet_write_u32s(&p, &o->oPosX, 3);
 
     network_send(&p);
 }
@@ -59,7 +59,7 @@ void network_receive_collect_item(struct Packet* p) {
     f32 pos[3] = { 0 };
 
     packet_read(p, &behaviorId, sizeof(u32));
-    packet_read(p, &pos, sizeof(f32) * 3);
+    packet_read_u32s(p, &pos, 3);
 
     const void* behavior = get_behavior_from_id(behaviorId);
 

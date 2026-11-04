@@ -6,6 +6,7 @@
 #include "pc/djui/djui_panel_join_message.h"
 #include "pc/debuglog.h"
 #include "pc/mods/mod_cache.h"
+#include "packet_safe_path.h"
 
 void network_send_mod_list_request(void) {
     SOFT_ASSERT(gNetworkType == NT_CLIENT);
@@ -73,15 +74,15 @@ void network_send_mod_list(void) {
         packet_init(&p, PACKET_MOD_LIST_ENTRY, true, PLMT_NONE);
         packet_write(&p, &i, sizeof(u16));
         packet_write(&p, &nameLength, sizeof(u16));
-        packet_write(&p, mod->name, sizeof(u8) * nameLength);
+        packet_write_bytes(&p, mod->name, sizeof(u8) * nameLength);
         packet_write(&p, &incompatibleLength, sizeof(u16));
         if (mod->incompatible) {
-            packet_write(&p, mod->incompatible, sizeof(u8) * incompatibleLength);
+            packet_write_bytes(&p, mod->incompatible, sizeof(u8) * incompatibleLength);
         } else {
             packet_write(&p, "", 0);
         }
         packet_write(&p, &relativePathLength, sizeof(u16));
-        packet_write(&p, mod->relativePath, sizeof(u8) * relativePathLength);
+        packet_write_bytes(&p, mod->relativePath, sizeof(u8) * relativePathLength);
         packet_write(&p, &modSize, sizeof(u64));
         packet_write(&p, &mod->isDirectory, sizeof(u8));
         packet_write(&p, &mod->pausable, sizeof(u8));
@@ -99,7 +100,7 @@ void network_send_mod_list(void) {
             packet_write(&p, &i, sizeof(u16));
             packet_write(&p, &j, sizeof(u16));
             packet_write(&p, &relativePathLength, sizeof(u16));
-            packet_write(&p, file->relativePath, sizeof(u8) * relativePathLength);
+            packet_write_bytes(&p, file->relativePath, sizeof(u8) * relativePathLength);
             packet_write(&p, &fileSize, sizeof(u64));
             packet_write(&p, &file->dataHash[0], sizeof(u8) * 16);
             network_send_to(0, &p);
@@ -197,7 +198,7 @@ void network_receive_mod_list_entry(struct Packet* p) {
     }
 
     // get name
-    packet_read(p, mod->name, nameLength * sizeof(u8));
+    packet_read_bytes(p, mod->name, nameLength * sizeof(u8));
     mod->name[nameLength] = 0;
 
     // get incompatible length
@@ -211,7 +212,7 @@ void network_receive_mod_list_entry(struct Packet* p) {
     // get incompatible
     if (incompatibleLength > 0) {
         char incompatible[MOD_INCOMPATIBLE_SIZE] = { 0 };
-        packet_read(p, incompatible, incompatibleLength * sizeof(u8));
+        packet_read_bytes(p, incompatible, incompatibleLength * sizeof(u8));
         mod->incompatible = strdup(incompatible);
     } else {
         packet_read(p, 0, 0);
@@ -220,11 +221,16 @@ void network_receive_mod_list_entry(struct Packet* p) {
     // get other fields
     u16 relativePathLength = 0;
     packet_read(p, &relativePathLength, sizeof(u16));
-    packet_read(p, mod->relativePath, relativePathLength * sizeof(u8));
+    packet_read_bytes(p, mod->relativePath, relativePathLength * sizeof(u8));
     packet_read(p, &mod->size, sizeof(u64));
     packet_read(p, &mod->isDirectory, sizeof(u8));
     packet_read(p, &mod->pausable, sizeof(u8));
     packet_read(p, &mod->ignoreScriptWarnings, sizeof(u8));
+    if (!packet_path_is_safe(mod->relativePath)) {
+        LOG_ERROR("Received mod path outside of the downloads folder!");
+        network_shutdown(false, false, false, false);
+        return;
+    }
     normalize_path(mod->relativePath);
     LOG_INFO("    '%s': %llu", mod->name, (u64)mod->size);
 
@@ -296,10 +302,15 @@ void network_receive_mod_list_file(struct Packet* p) {
 
     u16 relativePathLength = 0;
     packet_read(p, &relativePathLength, sizeof(u16));
-    packet_read(p, file->relativePath, relativePathLength * sizeof(u8));
+    packet_read_bytes(p, file->relativePath, relativePathLength * sizeof(u8));
     packet_read(p, &file->size, sizeof(u64));
     packet_read(p, &file->dataHash, sizeof(u8) * 16);
     file->fp = NULL;
+    if (!packet_path_is_safe(file->relativePath)) {
+        LOG_ERROR("Received mod file path outside of the downloads folder!");
+        network_shutdown(false, false, false, false);
+        return;
+    }
     LOG_INFO("      '%s': %llu", file->relativePath, (u64)file->size);
 
     struct ModCacheEntry* cache = mod_cache_get_from_hash(file->dataHash);

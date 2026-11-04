@@ -30,6 +30,10 @@ void DynOS_Gfx_GenerateModPacks(char* modPath) {
 }
 
 void DynOS_Gfx_GeneratePacks(const char* directory) {
+#if IS_BIG_ENDIAN
+    // Binaries hold little-endian command words; this build would write its own packing.
+    return;
+#endif
     if (configSkipPackGeneration) { return; }
 
     static char sModPath[MOD_PATH_LEN] = "";

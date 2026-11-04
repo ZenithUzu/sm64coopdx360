@@ -1,3 +1,4 @@
+#include "dynos_cmd_order.h"
 #include "dynos.cpp.h"
 extern "C" {
 #include "include/level_commands.h"
@@ -1040,8 +1041,10 @@ static DataNode<LevelScript>* DynOS_Lvl_Load(BinFile *aFile, GfxData *aGfxData) 
     DynOS_Lvl_Validate_Begin();
 
     // Read it
+    struct DynosCmdOrder _Order = { NULL };
     for (u32 i = 0; i != _Node->mSize; ++i) {
         u32 _Value = aFile->Read<u32>();
+        const u32 _Word = dynos_cmd_order_word(&_Order, _Value, 1);
 
         bool requirePointer = DynOS_Lvl_Validate_RequirePointer(_Value);
 
@@ -1056,7 +1059,7 @@ static DataNode<LevelScript>* DynOS_Lvl_Load(BinFile *aFile, GfxData *aGfxData) 
                 PrintError("Expected a pointer while reading level script: %s, %u", _Node->mName.begin(), _Value);
                 _Node->mData[i] = 0;
             } else {
-                _Node->mData[i] = (uintptr_t) _Value;
+                _Node->mData[i] = (uintptr_t) _Word;
             }
         }
     }

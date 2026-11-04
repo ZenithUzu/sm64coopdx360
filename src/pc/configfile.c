@@ -237,6 +237,10 @@ bool         configDjuiThemeCenter                = true;
 bool         configDjuiThemeGradients             = true;
 unsigned int configDjuiThemeFont                  = FONT_NORMAL;
 unsigned int configDjuiScale                      = 0;
+#ifdef __XSDK__
+unsigned int configXboxOutputGamma                = 100;
+bool         configXboxLimitedRange               = false;
+#endif
 // other
 unsigned int configRulesVersion                   = 0;
 bool         configHideSocketWarning              = false;
@@ -396,6 +400,10 @@ static const struct ConfigOption options[] = {
     {.name = "djui_theme_gradients",           .type = CONFIG_TYPE_BOOL,   .boolValue   = &configDjuiThemeGradients},
     {.name = "djui_theme_font",                .type = CONFIG_TYPE_UINT,   .uintValue   = &configDjuiThemeFont},
     {.name = "djui_scale",                     .type = CONFIG_TYPE_UINT,   .uintValue   = &configDjuiScale},
+#ifdef __XSDK__
+    {.name = "xbox_output_gamma",              .type = CONFIG_TYPE_UINT,   .uintValue   = &configXboxOutputGamma},
+    {.name = "xbox_limited_range",             .type = CONFIG_TYPE_BOOL,   .boolValue   = &configXboxLimitedRange},
+#endif
     // other
     {.name = "rules_version",                  .type = CONFIG_TYPE_UINT,   .uintValue   = &configRulesVersion},
     {.name = "hide_socket_warning",            .type = CONFIG_TYPE_BOOL,   .boolValue   = &configHideSocketWarning},
@@ -825,6 +833,9 @@ NEXT_OPTION:
 
     if (configDjuiTheme >= DJUI_THEME_MAX) { configDjuiTheme = 0; }
     if (configDjuiScale >= 5) { configDjuiScale = 0; }
+#ifdef __XSDK__
+    if (configXboxOutputGamma < 70 || configXboxOutputGamma > 130) { configXboxOutputGamma = 100; }
+#endif
 
     if (gCLIOpts.fullscreen == 1) {
         configWindow.fullscreen = true;
