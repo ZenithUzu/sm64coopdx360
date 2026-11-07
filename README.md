@@ -227,4 +227,4 @@ La fuente publicada incorpora los cambios locales de Claude hasta la iteración 
 
 La base se identifica con la etiqueta `claude-v44-source`. Las opciones gráficas nuevas se desarrollan en `feature/image-quality`; no forman parte de esa etiqueta.
 
-Para compilar desde la interfaz de [xSDK Windows](https://github.com/ZenithUzu/xsdk/releases/tag/windows-portable-v3.3.1), selecciona este repositorio como proyecto, tu ROM US y las rutas del SDK/SDL3 ya construidos. Usa la receta `.xsdk-project.json` y consulta [la guía de construcción](docs/xbox360/BUILD.md). No hacen falta Neighborhood ni VS2010 para compilar; Neighborhood es opcional para transferir tu resultado local.
+Para compilar desde la interfaz de [xSDK Windows](https://github.com/ZenithUzu/xsdk/releases/tag/windows-portable-v3.3.1), selecciona este repositorio como proyecto, tu ROM US y las rutas del SDK/SDL3 ya construidos. Usa la receta `xsdk-project.json` y consulta [la guía de construcción](docs/xbox360/BUILD.md). No hacen falta Neighborhood ni VS2010 para compilar; Neighborhood es opcional para transferir tu resultado local.
