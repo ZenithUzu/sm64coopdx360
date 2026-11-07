@@ -181,6 +181,12 @@ void djui_panel_host_create(struct DjuiBase* caller) {
             djui_base_set_alignment(&button1->base, DJUI_HALIGN_RIGHT, DJUI_VALIGN_TOP);
         }
 
+#if defined(__XSDK__)
+        djui_checkbox_create(body, "Sala publica (cualquiera puede entrar)", &configXboxPublicLobby, NULL);
+        if (configXboxServerIp[0]) {
+            djui_checkbox_create(body, "Alojar en el servidor Xbox", &configXboxHostOnXboxServer, NULL);
+        }
+#endif
         djui_button_create(body, DLANG(HOST, SETTINGS), DJUI_BUTTON_STYLE_NORMAL, djui_panel_host_settings_create);
         djui_button_create(body, DLANG(HOST, MODS), DJUI_BUTTON_STYLE_NORMAL, djui_panel_host_mods_create);
 

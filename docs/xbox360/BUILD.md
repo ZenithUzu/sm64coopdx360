@@ -62,6 +62,11 @@ cc -std=c99 -Wall -Wextra -Werror -Idata -Isrc platform/xsdk/tests/dynos_cmd_ord
 cc -std=c99 -Wall -Wextra -Werror -Idata platform/xsdk/tests/dynos_tex_shrink_test.c -o /tmp/dynos_tex_shrink_test
 /tmp/dynos_tex_shrink_test
 python3 platform/xsdk/tests/port_dynos_pack_test.py
+python3 platform/xsdk/tests/audio_mutex_balance_test.py
 ```
 
 La CI realiza controles de fuente; no descarga ROMs, no necesita credenciales de consola y no publica artefactos del juego.
+
+## Publicación de la base v44
+
+Para reproducir la base de Claude: `git checkout claude-v44-source` tras clonar el repositorio completo. La rama `feature/image-quality` se reserva para opciones gráficas nuevas. Compila con el script anterior o la receta de la herramienta Windows; los binarios se generan localmente y no se publican. El código de v44 incluye los nuevos archivos FATX y sus pruebas.

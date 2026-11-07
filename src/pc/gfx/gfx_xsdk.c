@@ -77,6 +77,10 @@ static void init(const char *title) {
     gfx_xsdk_apply_output_levels();
     xsdk_log_write("render mode: Guide-compatible 720p %ux%u", width, height);
     native_width=width;native_height=height;
+    // The game draws at this share of 720p and the present scales it up: resolves want widths in 32s, heights in 8s.
+    static const unsigned render_percent[3] = { 100, 75, 50 };
+    const unsigned percent = render_percent[configXboxRenderScale < 3 ? configXboxRenderScale : 0];
+    width = (native_width * percent / 100) & ~31u; height = (native_height * percent / 100) & ~7u;
     xsdk_log_write("render scale: game %ux%u, presentation %ux%u",width,height,native_width,native_height);
     running = true;
 }
@@ -117,6 +121,12 @@ static void swap_end(void) {
     if (frame_pending) {
         xsdk_present_end(); frame_pending = false;
         restore_levels_after_guide();
+        // capture.txt beside the XEX asks for one frame in capture.raw, to compare colours with the PC.
+        static unsigned capture_check;
+        if (++capture_check % 60 == 0) {
+            FILE *request = fopen("game:\\capture.txt", "r");
+            if (request) { fclose(request); remove("game:\\capture.txt"); gfx_xenos_request_capture(); }
+        }
         static uint64_t last_report;
         uint64_t now = SDL_GetTicksNS();
         if (now - last_report >= 5000000000ULL) {

@@ -240,6 +240,10 @@ unsigned int configDjuiScale                      = 0;
 #ifdef __XSDK__
 unsigned int configXboxOutputGamma                = 100;
 bool         configXboxLimitedRange               = false;
+bool         configXboxPublicLobby                = false;
+char         configXboxServerIp[MAX_CONFIG_STRING] = "";
+bool         configXboxHostOnXboxServer           = false;
+unsigned int configXboxRenderScale                = 0;
 #endif
 // other
 unsigned int configRulesVersion                   = 0;
@@ -403,6 +407,10 @@ static const struct ConfigOption options[] = {
 #ifdef __XSDK__
     {.name = "xbox_output_gamma",              .type = CONFIG_TYPE_UINT,   .uintValue   = &configXboxOutputGamma},
     {.name = "xbox_limited_range",             .type = CONFIG_TYPE_BOOL,   .boolValue   = &configXboxLimitedRange},
+    {.name = "xbox_public_lobby",              .type = CONFIG_TYPE_BOOL,   .boolValue   = &configXboxPublicLobby},
+    {.name = "xbox_server_ip",                 .type = CONFIG_TYPE_STRING, .stringValue = (char*)&configXboxServerIp, .maxStringLength = MAX_CONFIG_STRING},
+    {.name = "xbox_host_on_xbox_server",       .type = CONFIG_TYPE_BOOL,   .boolValue   = &configXboxHostOnXboxServer},
+    {.name = "xbox_render_scale",              .type = CONFIG_TYPE_UINT,   .uintValue   = &configXboxRenderScale},
 #endif
     // other
     {.name = "rules_version",                  .type = CONFIG_TYPE_UINT,   .uintValue   = &configRulesVersion},
@@ -835,6 +843,7 @@ NEXT_OPTION:
     if (configDjuiScale >= 5) { configDjuiScale = 0; }
 #ifdef __XSDK__
     if (configXboxOutputGamma < 70 || configXboxOutputGamma > 130) { configXboxOutputGamma = 100; }
+    if (configXboxRenderScale > 2) { configXboxRenderScale = 0; }
 #endif
 
     if (gCLIOpts.fullscreen == 1) {

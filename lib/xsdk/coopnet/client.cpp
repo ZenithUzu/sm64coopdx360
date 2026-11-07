@@ -1,3 +1,6 @@
+#ifdef __XSDK__
+#include "xsdk/log.h"
+#endif
 #include "client.hpp"
 #include "mpacket.hpp"
 #include "utils.hpp"
@@ -73,10 +76,18 @@ bool Client::Begin(std::string aHost, uint32_t aPort, std::string aName, uint64_
 
     mConnection->Begin(nullptr);
 
+#ifdef __XSDK__
+    // Whether the console could read its own XEX: 0 means it told the server it couldn't.
+    const uint64_t executableHash = hashFile();
+    xsdk_log_write("coopnet: executable hash %s, device id %s", executableHash ? "read" : "missing",
+        SocketGetInfoBits(mConnection->mSocket) == SocketAddHash(SOCKET_DEFAULT_INFO) ? "default" : "from the MAC");
+#else
+    const uint64_t executableHash = hashFile();
+#endif
     MPacketInfo({
         .destId = aDestId,
         .infoBits = SocketGetInfoBits(mConnection->mSocket),
-        .hash = hashFile(),
+        .hash = executableHash,
     }, { aName }).Send(*mConnection);
 
     return true;

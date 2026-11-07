@@ -23,6 +23,12 @@
 #include "cliopts.h"
 #include "configfile.h"
 #include "thread.h"
+#if defined(__XSDK__)
+int xsdk_thread_move(uint32_t hardware_thread);
+uint32_t xsdk_thread_hardware_thread(void);
+// Hardware threads come in pairs on a core: the game keeps 0 and 1, and the rest go to the next core (xSDK's GUIDE.md).
+enum { AUDIO_WORKER_HARDWARE_THREAD = 2, BACKGROUND_HARDWARE_THREAD = 3 };
+#endif
 #include "controller/controller_api.h"
 #include "controller/controller_keyboard.h"
 #include "controller/controller_mouse.h"
@@ -269,9 +275,17 @@ static void select_graphics_backend(void) {
 
 #endif
 
+#if defined(__XSDK__)
+    // SDL's feeder thread starts on its creator's hardware thread: keep it off the game's core.
+    const uint32_t creatorHardwareThread = xsdk_thread_hardware_thread();
+    xsdk_thread_move(BACKGROUND_HARDWARE_THREAD);
+#endif
     if (!gAudioApi->init()) {
         gAudioApi = &audio_null;
     }
+#if defined(__XSDK__)
+    xsdk_thread_move(creatorHardwareThread);
+#endif
 }
 
 void produce_interpolation_frames_and_delay(void) {
@@ -378,7 +392,31 @@ inline static void buffer_audio(void) {
 
 #if defined(__XSDK__)
 int xsdk_launch(const char *path, const void *data, size_t size_bytes);
+#include <semaphore.h>
 #include "libcoopnet.h"
+static sem_t sAudioWorkerStart, sAudioWorkerDone;
+static bool sAudioWorkerBusy;
+
+// Mixes one tick's audio beside the render. The game state it reads stays untouched: the main thread waits for it
+// before the next tick, and audio calls during the render take gAudioThread's mutex.
+static void *audio_worker(UNUSED void *arg) {
+    xsdk_thread_move(AUDIO_WORKER_HARDWARE_THREAD);
+    while (true) {
+        sem_wait(&sAudioWorkerStart);
+        lock_mutex(&gAudioThread);
+        if (gAudioApi) { buffer_audio(); }
+        unlock_mutex(&gAudioThread);
+        sem_post(&sAudioWorkerDone);
+    }
+    return NULL;
+}
+
+static void audio_worker_wait(void) {
+    if (sAudioWorkerBusy) {
+        sem_wait(&sAudioWorkerDone);
+        sAudioWorkerBusy = false;
+    }
+}
 #endif
 
 void *audio_thread(UNUSED void *arg) {
@@ -427,6 +465,7 @@ void produce_one_frame(void) {
     static unsigned profileFrames;
     double profileStart = gWindowApi->get_time();
 #endif
+    audio_worker_wait();
     const bool trace = frame < 3;
     if (trace) PORT_TRACE("frame %u: network begin", frame);
     CTX_EXTENT(CTX_NETWORK, network_update);
@@ -444,8 +483,15 @@ void produce_one_frame(void) {
 #if defined(__XSDK__)
     double logicEnd = gWindowApi->get_time();
 #endif
+#if defined(__XSDK__)
+    // With a menu open keep it inline: a click during the render can reload mods and reset the audio.
+    if (gAudioThread.state == RUNNING && !djui_panel_is_active()) {
+        sAudioWorkerBusy = true;
+        sem_post(&sAudioWorkerStart);
+    } else
+#endif
     // If we aren't threaded
-    if (gAudioThread.state == INVALID) {
+    if (gAudioThread.state == INVALID || djui_panel_is_active()) {
         CTX_EXTENT(CTX_AUDIO, buffer_audio);
     if (trace) PORT_TRACE("frame %u: audio end", frame);
     }
@@ -512,6 +558,9 @@ void produce_one_dummy_frame(void (*callback)(), u8 clearColorR, u8 clearColorG,
 }
 
 void audio_shutdown(void) {
+#if defined(__XSDK__)
+    audio_worker_wait();
+#endif
     if (gAudioApi) {
         if (gAudioApi->shutdown) gAudioApi->shutdown();
         gAudioApi = NULL;
@@ -660,6 +709,12 @@ int main(int argc, char *argv[]) {
 
     // Initialize the audio thread if possible.
     // init_thread_handle(&gAudioThread, audio_thread, NULL, NULL, 0);
+#if defined(__XSDK__)
+    if (sem_init(&sAudioWorkerStart, 0, 0) == 0 && sem_init(&sAudioWorkerDone, 0, 0) == 0) {
+        init_thread_handle(&gAudioThread, audio_worker, NULL, NULL, 0);
+    }
+    PORT_TRACE("threads: game on hardware thread %u, audio worker %s", (unsigned)xsdk_thread_hardware_thread(), gAudioThread.state == RUNNING ? "running" : "off");
+#endif
 
     loading_screen_reset();
 
@@ -714,7 +769,7 @@ int main(int argc, char *argv[]) {
     // The console has no terminal: network messages go to the log, the only way to see why a join failed.
     configDebugInfo = configDebugError = true;
 #endif
-    PORT_TRACE("startup: main loop reached, native 720p target, mods fix 35");
+    PORT_TRACE("startup: main loop reached, native 720p target, mods fix 44");
     // main loop
     while (true) {
         debug_context_reset();

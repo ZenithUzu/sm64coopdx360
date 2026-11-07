@@ -8,7 +8,7 @@ Port **experimental y no oficial** de [sm64coopdx](https://github.com/coop-delux
 
 **Aquí solo hay código fuente.** No se publica ni se publicará el juego empaquetado: ni XEX, ni ROM, ni assets, ni SDKs. No hay descarga lista para jugar; cada persona compila su propia copia con su propia ROM. No pidas ni compartas esos archivos en issues o pull requests.
 
-## Estado — 3 de noviembre de 2026
+## Estado de publicación — 6 de noviembre de 2026
 
 | Área | Estado |
 | --- | --- |
@@ -22,7 +22,7 @@ Port **experimental y no oficial** de [sm64coopdx](https://github.com/coop-delux
 | Mods con Lua | Character Select con un pack de personajes carga sin caerse; el audio de mods no está confirmado de oído |
 | Modelos DynOS | Se convierten al cargar; un pack grande como Render96 requiere la herramienta de port y no está confirmado en juego |
 | En línea con PC | La Xbox entró a una partida alojada en PC con servidor CoopNet propio; falta validar jugadores, objetos y progreso en movimiento |
-| Salas Android en el servidor oficial | La lista muestra salas de la misma versión (v1.5.1); entrar desde la Xbox **sin probar** |
+| Salas en el servidor oficial | Alojar desde la Xbox funciona y otras personas han jugado en ella. Unirse a salas de PC (`sm64coopdx`) devuelve `JOIN_FAILED`: los administradores solo validan el juego oficial y no aceptan forks. Las salas `sm64coop-android` no tienen esa validación; entrar a ellas desde la Xbox falta confirmarlo |
 | Android directo con servidor propio | Sin probar |
 | Salir del juego | Vuelve al lanzador indicado en `exit_to.txt` desde el menú del juego |
 
@@ -133,9 +133,11 @@ Se configura en `save\sm64config.txt`, con el juego cerrado:
 | `coopnet_port` | `34197` | Puerto de CoopNet |
 | `coopnet_password` | Tu contraseña | Clave de las salas que crees |
 
-- **Servidor oficial:** la consola usa el nombre `sm64coop-android`, así que ve las salas de Android y no las de PC. Entrar a ellas está sin probar, y el servidor podría rechazarla con `JOIN_FAILED`.
+- **Servidor oficial:** según sus administradores, el hash solo se valida con el nombre `sm64coopdx`, el de PC, y ningún fork entra en la lista blanca. Por eso la Xbox usa `sm64coop-android`, el nombre del port de Android, que no tiene esa validación y sí tiene salas con gente. Las salas con contraseña usan `sm64coopdx`, como en Android: la Xbox puede alojarlas, pero no unirse a las de PC.
 - **Servidor propio:** es la forma confirmada de jugar con PC, compilando [CoopNet](https://github.com/coop-deluxe/coopnet). Protégelo: acepta solo tus direcciones y no abras su puerto en el router si no lo necesitas.
 - **Tus salas son privadas:** si `coopnet_password` está vacía, la consola crea una clave y la muestra al crear la partida. Para entrar a una sala hace falta esa clave.
+- **Servidor Xbox propio:** con `xbox_server_ip` apuntando a un CoopNet propio, la lista y la entrada a salas usan ese servidor, y al crear partida aparece **Alojar en el servidor Xbox**. Sin marcarlo, la consola aloja en el oficial, donde entran PC y Android. PC y teléfonos se unen a ese servidor poniendo su IP en `coopnet_ip`.
+- **Conexión directa:** sin servidor. Quien aloja elige **Conexión directa** y puerto `7777`, y los demás entran con su IP desde **Unirse → Conexión directa**. Fuera de la red de casa, quien aloja debe abrir el puerto UDP `7777` en su router. En la Xbox está sin probar.
 - **Respeta a los demás:** el autor informa que los administradores de CoopNet permiten este port si no se usan hacks ni se perjudica a otros jugadores, y que su soporte corre por cuenta del port. No uses este proyecto para eludir esas condiciones.
 
 ## Mods
@@ -218,3 +220,11 @@ Este repositorio no tiene una licencia única:
 El juego compilado enlaza CoopNet, así que quien **distribuya** un XEX debe cumplir la AGPL-3.0, además de los derechos del juego. Por eso este proyecto solo publica el código. La lista completa está en [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Esto no es asesoría legal.
 
 Créditos a Nintendo por el juego original; a n64decomp, sm64-port, djoslin0/sm64ex-coop, Coop Deluxe y sus contribuidores por las bases del proyecto; y a los autores de xSDK, SDL, Lua, zlib, CoopNet y libjuice. Este fork no implica afiliación ni patrocinio.
+
+## Base Claude v44 y rama gráfica
+
+La fuente publicada incorpora los cambios locales de Claude hasta la iteración 44: manejo de nombres FATX largos, audio con balance de mutex, mejoras de menús, gamma/rango de salida y resolución interna seleccionable. El registro de v44 confirma compilación y enlace; no equivale a una validación completa en consola de esta publicación. Los resultados de rendimiento anteriores corresponden a sesiones concretas, no a una garantía de FPS.
+
+La base se identifica con la etiqueta `claude-v44-source`. Las opciones gráficas nuevas se desarrollan en `feature/image-quality`; no forman parte de esa etiqueta.
+
+Para compilar desde la interfaz de [xSDK Windows](https://github.com/ZenithUzu/xsdk/releases/tag/windows-portable-v3.3.1), selecciona este repositorio como proyecto, tu ROM US y las rutas del SDK/SDL3 ya construidos. Usa la receta `.xsdk-project.json` y consulta [la guía de construcción](docs/xbox360/BUILD.md). No hacen falta Neighborhood ni VS2010 para compilar; Neighborhood es opcional para transferir tu resultado local.

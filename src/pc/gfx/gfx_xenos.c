@@ -41,6 +41,15 @@ static XsdkSamplerState white_sampler;
 static uint32_t width, height;
 static bool depth_test, depth_write, alpha_blend, decal;
 static int viewport[4], scissor[4];
+// What the GPU already holds this frame, to skip rewriting it on every draw. XAM and resolves run between frames.
+static struct {
+    bool valid, depth_test, depth_write, alpha_blend, decal;
+    const XsdkBuiltShader *built;
+    float constants[28];
+    int viewport[4], scissor[4];
+} sent;
+static uint64_t stat_draw_ns;
+uint64_t gfx_xenos_run_ns;
 extern unsigned char gVertexColor[3];
 static void fail(const char *name) { fprintf(stderr, "Xenos renderer: %s\n", name); exit(EXIT_FAILURE); }
 static void checked(NTSTATUS status, const char *name) { if (!NT_SUCCESS(status)) fail(name); }
@@ -162,11 +171,12 @@ static void begin(void) {
     static uint64_t last;
     uint64_t now = SDL_GetTicksNS();
     if (now - last >= 5000000000ULL) {
-        xsdk_log_write("render stats: draws %u specialized %u vertices %u copy_ms %u uploads %u upload_ms %u waits %u wait_ms %u", stat_draws, stat_specialized, (unsigned)stat_vertices, (unsigned)(stat_copy_ns/1000000), stat_uploads, (unsigned)(stat_upload_ns/1000000), stat_waits, (unsigned)(stat_wait_ns/1000000));
-        stat_draws=stat_uploads=stat_waits=stat_specialized=0; stat_upload_ns=stat_wait_ns=stat_vertices=stat_copy_ns=0; last=now;
+        xsdk_log_write("render stats: draws %u specialized %u vertices %u copy_ms %u draw_ms %u run_ms %u uploads %u upload_ms %u waits %u wait_ms %u", stat_draws, stat_specialized, (unsigned)stat_vertices, (unsigned)(stat_copy_ns/1000000), (unsigned)(stat_draw_ns/1000000), (unsigned)(gfx_xenos_run_ns/1000000), stat_uploads, (unsigned)(stat_upload_ns/1000000), stat_waits, (unsigned)(stat_wait_ns/1000000));
+        stat_draws=stat_uploads=stat_waits=stat_specialized=0; stat_upload_ns=stat_wait_ns=stat_vertices=stat_copy_ns=stat_draw_ns=0; gfx_xenos_run_ns=0; last=now;
     }
     // Keep sin() inputs small: the noise only needs to change between frames.
     noise_frame = (noise_frame + 1) % 150;
+    sent.valid = false;
     gfx_xsdk.get_dimensions(&width, &height);
     xsdk_gpu_set_target(width, height);
     // XAM may overwrite both color and depth in eDRAM. Discard that content
@@ -185,6 +195,7 @@ static void draw(float data[], size_t count, size_t triangles) {
     const unsigned drawId=draws++;
     if (drawId<24) xsdk_log_write("draw %u: floats %u triangles %u shader %08X",drawId,(unsigned)count,(unsigned)triangles,(unsigned)(uintptr_t)current);
     if (!current || !triangles) return;
+    const uint64_t draw_start = SDL_GetTicksNS();
     ++stat_draws;
     if (triangles > VERTEX_CAPACITY / 3) fail("vertex batch exceeds capacity");
     unsigned stride = 4 + 2 * (current->features.used_textures[0] + current->features.used_textures[1]) +
@@ -233,10 +244,13 @@ static void draw(float data[], size_t count, size_t triangles) {
         slots[0]=material->sampler[0];slots[1]=material->sampler[1];++stat_specialized;
     }
     if(registers>7) fail("material push constants exceed parameter block");
-    xsdk_gpu_set_shaders(&vertex_shader, pixel);
-    // Restore alongside each binding; the system UI and resolves also use GPU constants.
-    xsdk_built_shader_set_literals(&coopdx_vert);
-    xsdk_built_shader_set_literals(built);
+    const bool same_material = sent.valid && sent.built == built;
+    if (!same_material) {
+        xsdk_gpu_set_shaders(&vertex_shader, pixel);
+        // Restore with each binding; the system UI and resolves also use GPU constants.
+        xsdk_built_shader_set_literals(&coopdx_vert);
+        xsdk_built_shader_set_literals(built);
+    }
     float constants[28] = {0};
     for (unsigned j=0; j<16; j++) constants[j]=(float)current->commands[j];
     constants[16]=current->mode.use_2cycle; constants[17]=current->mode.use_alpha;
@@ -245,7 +259,10 @@ static void draw(float data[], size_t count, size_t triangles) {
     constants[23]=current->mode.light_map;
     const bool dither=current->mode.use_alpha && current->mode.use_dither;
     constants[24]=(float)noise_frame; constants[25]=dither || current->features.do_noise; constants[26]=dither;
-    xsdk_gpu_set_pixel_constants(push, constants, registers);
+    if (!same_material || memcmp(constants, sent.constants, sizeof(constants))) {
+        xsdk_gpu_set_pixel_constants(push, constants, registers);
+        memcpy(sent.constants, constants, sizeof(constants));
+    }
     for (unsigned t=0; t<2; t++) {
         if(slots[t]<0) continue;
         struct Texture *image = selected[t] < texture_count ? &textures[selected[t]] : NULL;
@@ -253,42 +270,79 @@ static void draw(float data[], size_t count, size_t triangles) {
             image && image->ready ? &image->image : &white,
             image && image->ready ? &image->sampler : &white_sampler);
     }
+    if (!sent.valid || sent.depth_test != depth_test || sent.depth_write != depth_write) {
     XsdkDepthStencil depth = {0}; XsdkDepthStencilState ds;
     depth.depth_test=depth_test; depth.depth_write=depth_test && depth_write; depth.depth_compare=XSDK_COMPARE_LESS_EQUAL;
     xsdk_gpu_depth_stencil_state(&ds, &depth); xsdk_gpu_set_depth_stencil(&ds);
+    }
+    if (!sent.valid || sent.alpha_blend != alpha_blend) {
     XsdkBlend blend = {0}; XsdkBlendState bs;
     blend.color_source=alpha_blend ? XSDK_BLEND_SRC_ALPHA : XSDK_BLEND_ONE;
     blend.color_dest=alpha_blend ? XSDK_BLEND_ONE_MINUS_SRC_ALPHA : XSDK_BLEND_ZERO;
     blend.alpha_source=XSDK_BLEND_ONE; blend.alpha_dest=XSDK_BLEND_ZERO; blend.write_mask=XSDK_WRITE_ALL;
     xsdk_gpu_blend_state(&bs, &blend); xsdk_gpu_set_blend(&bs);
+    }
+    if (!sent.valid || sent.decal != decal) {
     XsdkRaster raster = {0}; XsdkRasterState rs;
     // Xenos takes normalized depth bias; OpenGL takes integer depth-buffer units.
     raster.depth_bias=decal ? -2.0f / 16777215.0f : 0;
     // The slope term is per pixel: scale it to keep the world-space offset of -2 at 720p.
     raster.depth_bias_slope=decal ? -2.0f*(float)width/1280.0f : 0;
     xsdk_gpu_raster_state(&rs, &raster); xsdk_gpu_set_raster(&rs);
-    xsdk_gpu_set_viewport(viewport[0], (float)height-viewport[1]-viewport[3], viewport[2], viewport[3], 0, 1);
+    }
+    if (!sent.valid || memcmp(sent.viewport, viewport, sizeof(viewport))) {
+        xsdk_gpu_set_viewport(viewport[0], (float)height-viewport[1]-viewport[3], viewport[2], viewport[3], 0, 1);
+    }
     int x=scissor[0], y=(int)height-scissor[1]-scissor[3], w=scissor[2], h=scissor[3];
     if (x<0) { w+=x; x=0; } if (y<0) { h+=y; y=0; }
-    if (x>(int)width || y>(int)height || w<=0 || h<=0) return;
+    if (x>(int)width || y>(int)height || w<=0 || h<=0) { sent.valid = false; return; }
     if (w>(int)width-x) w=(int)width-x;
     if (h>(int)height-y) h=(int)height-y;
-    xsdk_gpu_set_scissor((uint32_t)x,(uint32_t)y,(uint32_t)w,(uint32_t)h);
+    if (!sent.valid || memcmp(sent.scissor, scissor, sizeof(scissor))) {
+        xsdk_gpu_set_scissor((uint32_t)x,(uint32_t)y,(uint32_t)w,(uint32_t)h);
+    }
+    sent.valid = true; sent.built = built; sent.depth_test = depth_test; sent.depth_write = depth_write;
+    sent.alpha_blend = alpha_blend; sent.decal = decal;
+    memcpy(sent.viewport, viewport, sizeof(viewport)); memcpy(sent.scissor, scissor, sizeof(scissor));
     xsdk_gpu_set_vertices(0, xsdk_gpu_address(batch), bytes);
     xsdk_gpu_draw(XSDK_PRIMITIVE_TRIANGLE_LIST, (uint32_t)n);
+    stat_draw_ns += SDL_GetTicksNS() - draw_start;
     if (drawId<24) xsdk_log_write("draw %u: submitted",drawId);
 }
 // The game uses a smaller render target. XAM always receives the full 720p
 // front buffer, so opening the Guide doesn't change the display's mode or layout.
+static bool capture_requested;
+void gfx_xenos_request_capture(void) { capture_requested = true; }
+// The frame as the game drew it, before any scaling: a header of width, height and pitch, then scene_texture's tiled
+// texels as they are in memory. platform/xsdk/capture_to_png.py turns it into a PNG.
+static void write_capture(void) {
+    capture_requested = false;
+    wait_gpu();
+    FILE *file = fopen("game:\\capture.raw", "wb");
+    if (!file) { xsdk_log_write("capture: cannot write capture.raw"); return; }
+    const uint32_t header[3] = { scene_texture.width, scene_texture.height, scene_texture.pitch };
+    fwrite(header, sizeof(header), 1, file);
+    fwrite((const void *)scene_texture.texels, 1, scene_texture.size_bytes, file);
+    fclose(file);
+    xsdk_log_write("capture: %ux%u written", (unsigned)scene_texture.width, (unsigned)scene_texture.height);
+}
 void gfx_xenos_present(uint32_t address, uint32_t output_width, uint32_t output_height) {
     if (scene_texture.width==output_width && scene_texture.height==output_height) {
+        if (capture_requested) {
+            // A copy that leaves eDRAM as it is, for the resolve to the screen right after.
+            xsdk_gpu_set_resolve_clears(false,false);
+            xsdk_gpu_resolve_texture(&scene_texture,0xFF000000);
+            xsdk_gpu_set_resolve_clears(true,true);
+        }
         xsdk_gpu_resolve(address,output_width,output_height,0xFF000000);
+        if (capture_requested) { write_capture(); }
         return;
     }
     // Neither copy clears: the 720p target's depth overlaps the game target's color.
     xsdk_gpu_set_resolve_clears(false,false);
     xsdk_gpu_resolve_texture(&scene_texture,0xFF000000);
     xsdk_gpu_invalidate(scene_texture.address,scene_texture.size_bytes);
+    if (capture_requested) { write_capture(); }
     xsdk_gpu_set_target(output_width,output_height);
     xsdk_gpu_set_shaders(&upscale_vertex,&upscale_pixel);
     xsdk_built_shader_set_literals(&upscale_vert);

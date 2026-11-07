@@ -86,6 +86,9 @@ std::string getExecutablePath() {
     if (_NSGetExecutablePath(path, &size) == 0) {
         return std::string(path);
     }
+#elif defined(__XSDK__)
+    (void)path;
+    return "game:/sm64coopdx.xex";
 #endif
     return "";
 }
@@ -102,7 +105,17 @@ static std::string readFileData(const std::string &filepath) {
 }
 
 std::size_t hashFile(const std::string &filepath = getExecutablePath()) {
+#ifdef __XSDK__
+    // The whole XEX in memory, on a console that may be short of it: a hash isn't worth stopping the game.
+    try {
+        const std::string data = readFileData(filepath);
+        return data == "" ? 0 : std::hash<std::string>{}(data);
+    } catch (...) {
+        return 0;
+    }
+#else
     const std::string data = readFileData(filepath);
     if (data == "") { return 0; }
     return std::hash<std::string>{}(data);
+#endif
 }

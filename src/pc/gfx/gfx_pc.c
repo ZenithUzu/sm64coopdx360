@@ -2114,7 +2114,14 @@ void gfx_run(Gfx *commands) {
 
     //double t0 = gfx_wapi->get_time();
     gfx_rapi->start_frame();
+#if defined(__XSDK__)
+    extern uint64_t gfx_xenos_run_ns;
+    const double runStart = gfx_wapi->get_time();
     gfx_run_dl(commands);
+    gfx_xenos_run_ns += (uint64_t)((gfx_wapi->get_time() - runStart) * 1000000000.0);
+#else
+    gfx_run_dl(commands);
+#endif
 }
 
 void gfx_end_frame_render(void) {

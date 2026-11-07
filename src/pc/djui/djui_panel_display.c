@@ -154,6 +154,8 @@ void djui_panel_display_create(struct DjuiBase* caller) {
 #ifdef __XSDK__
         djui_slider_create(body, "Gamma de salida (TV)", &configXboxOutputGamma, 70, 130, djui_panel_display_output_levels_change);
         djui_checkbox_create(body, "Rango limitado (TV)", &configXboxLimitedRange, djui_panel_display_output_levels_change);
+        char* renderScaleChoices[3] = { "100% (1280x720)", "75% (960x540)", "50% (640x360)" };
+        djui_selectionbox_create(body, "Resolucion (al reiniciar)", renderScaleChoices, 3, &configXboxRenderScale, NULL);
 #endif
 
         djui_button_create(body, DLANG(MENU, BACK), DJUI_BUTTON_STYLE_BACK, djui_panel_menu_back);

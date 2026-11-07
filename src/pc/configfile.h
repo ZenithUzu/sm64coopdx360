@@ -182,6 +182,10 @@ extern unsigned int configDjuiScale;
 #ifdef __XSDK__
 extern unsigned int configXboxOutputGamma;
 extern bool         configXboxLimitedRange;
+extern bool         configXboxPublicLobby;
+extern char         configXboxServerIp[MAX_CONFIG_STRING];
+extern bool         configXboxHostOnXboxServer;
+extern unsigned int configXboxRenderScale;
 #endif
 // other
 extern unsigned int configRulesVersion;

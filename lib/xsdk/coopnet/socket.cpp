@@ -122,6 +122,7 @@ uint64_t SocketGetInfoBits(int aSocket) {
     return info;
 }
 #elif defined(__XSDK__)
+#include "xsdk/kernel.h"
 
 int SocketInitialize(int aAf, int aType, int aProtocol) {
     return socket(aAf, aType, aProtocol);
@@ -143,10 +144,20 @@ void SocketLimitBuffer(int aSocket, int64_t* amount) {
     (void)aSocket; (void)amount;
 }
 
-// xSDK doesn't list interfaces, so the console reports the same default every platform starts from.
+// The console's Ethernet address, from XAM, folded in as the other platforms fold in each adapter's.
 uint64_t SocketGetInfoBits(int aSocket) {
     (void)aSocket;
-    return SocketAddHash(SOCKET_DEFAULT_INFO);
+    uint64_t info = SOCKET_DEFAULT_INFO;
+    XNADDR address = { 0 };
+    // 0 means XAM has no address yet: keep the default rather than a MAC of zeros.
+    if (NetDll_XNetGetTitleXnAddr(XNCALLER_TITLE, &address) != 0) {
+        uint64_t value = 0;
+        for (int i = 0; i < 6; i++) {
+            value ^= ((uint64_t)address.ethernet[i]) << (8 * i);
+        }
+        if (value) { info += value; }
+    }
+    return SocketAddHash(info);
 }
 
 #else

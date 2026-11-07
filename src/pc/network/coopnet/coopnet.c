@@ -30,14 +30,20 @@ static uint64_t sLocalLobbyOwnerId = 0;
 static enum NetworkType sNetworkType;
 static bool sReconnecting = false;
 
-static CoopNetRc coopnet_initialize(void);
-
-static const char* coopnet_game_name(void) {
+static CoopNetRc coopnet_initialize(bool hosting);
 #if defined(__XSDK__)
-    // The official server groups lobbies by this name, and the console plays with the Android ones. On a private
-    // server it stays the PC's, so both see each other. shortcut: 172.16/12 counts as public, add it if one is used.
-    const char* ip = configCoopNetIp;
-    if (strncmp(ip, "192.168.", 8) && strncmp(ip, "10.", 3) && strncmp(ip, "127.", 4)) { return "sm64coop-android"; }
+// The server the connection is open to: the official one, or the console's own when xbox_server_ip names one.
+static char sConnectedIp[MAX_CONFIG_STRING] = "";
+#endif
+
+static const char* coopnet_game_name(const char* password) {
+#if defined(__XSDK__)
+    // Public official-service lobbies use the Android namespace; private servers
+    // and password-protected lobbies retain the PC namespace used by this port.
+    const char* ip = sConnectedIp[0] ? sConnectedIp : configCoopNetIp;
+    if (password[0] == '\0' && strncmp(ip, "192.168.", 8) && strncmp(ip, "10.", 3) && strncmp(ip, "127.", 4)) { return "sm64coop-android"; }
+#else
+    (void)password;
 #endif
     return GAME_NAME;
 }
@@ -45,8 +51,8 @@ static const char* coopnet_game_name(void) {
 bool ns_coopnet_query(QueryCallbackPtr callback, QueryFinishCallbackPtr finishCallback, const char* password) {
     gCoopNetCallbacks.OnLobbyListGot = callback;
     gCoopNetCallbacks.OnLobbyListFinish = finishCallback;
-    if (coopnet_initialize() != COOPNET_OK) { return false; }
-    if (coopnet_lobby_list_get(coopnet_game_name(), password) != COOPNET_OK) { return false; }
+    if (coopnet_initialize(false) != COOPNET_OK) { return false; }
+    if (coopnet_lobby_list_get(coopnet_game_name(password), password) != COOPNET_OK) { return false; }
     return true;
 }
 
@@ -163,9 +169,14 @@ static bool ns_coopnet_initialize(enum NetworkType networkType, bool reconnectin
     sNetworkType = networkType;
     sReconnecting = reconnecting;
     if (reconnecting) { return true; }
+#if defined(__XSDK__)
+    // It may be connected to the other server: coopnet_initialize switches.
+    return coopnet_initialize(networkType == NT_SERVER) == COOPNET_OK;
+#else
     return coopnet_is_connected()
         ? true
-        : (coopnet_initialize() == COOPNET_OK);
+        : (coopnet_initialize(networkType == NT_SERVER) == COOPNET_OK);
+#endif
 }
 
 static char* ns_coopnet_get_id_str(u8 localIndex) {
@@ -227,12 +238,12 @@ void ns_coopnet_update(void) {
             if (sReconnecting) {
                 LOG_INFO("Update lobby");
                 coopnet_populate_description();
-                coopnet_lobby_update(sLocalLobbyId, coopnet_game_name(), get_version(), configPlayerName, mode, sCoopNetDescription);
+                coopnet_lobby_update(sLocalLobbyId, coopnet_game_name(gCoopNetPassword), get_version(), configPlayerName, mode, sCoopNetDescription);
             } else {
                 LOG_INFO("Create lobby");
 #if defined(__XSDK__)
-                // CoopNet lists a lobby without a password for everyone: the console's are always private.
-                if (configPassword[0] == '\0') {
+                // CoopNet lists a lobby without a password for everyone: the console's are private unless asked otherwise.
+                if (!configXboxPublicLobby && configPassword[0] == '\0') {
                     static const char letters[] = "abcdefghjkmnpqrstuvwxyz23456789";
                     u8 random[10];
                     if (getentropy(random, sizeof(random)) != 0) {
@@ -248,9 +259,13 @@ void ns_coopnet_update(void) {
                     djui_popup_create(message, 2);
                 }
 #endif
+#if defined(__XSDK__)
+                snprintf(gCoopNetPassword, 64, "%s", configXboxPublicLobby ? "" : configPassword);
+#else
                 snprintf(gCoopNetPassword, 64, "%s", configPassword);
+#endif
                 coopnet_populate_description();
-                coopnet_lobby_create(coopnet_game_name(), get_version(), configPlayerName, mode, (uint16_t)configAmountOfPlayers, gCoopNetPassword, sCoopNetDescription);
+                coopnet_lobby_create(coopnet_game_name(gCoopNetPassword), get_version(), configPlayerName, mode, (uint16_t)configAmountOfPlayers, gCoopNetPassword, sCoopNetDescription);
             }
         } else if (sNetworkType == NT_CLIENT) {
             LOG_INFO("Join lobby");
@@ -311,7 +326,7 @@ static void ns_coopnet_shutdown(bool reconnecting) {
     sLocalLobbyOwnerId = 0;
 }
 
-static CoopNetRc coopnet_initialize(void) {
+static CoopNetRc coopnet_initialize(bool hosting) {
     gCoopNetCallbacks.OnConnected = coopnet_on_connected;
     gCoopNetCallbacks.OnDisconnected = coopnet_on_disconnected;
     gCoopNetCallbacks.OnReceive = coopnet_on_receive;
@@ -321,12 +336,23 @@ static CoopNetRc coopnet_initialize(void) {
     gCoopNetCallbacks.OnPeerDisconnected = coopnet_on_peer_disconnected;
     gCoopNetCallbacks.OnLoadBalance = coopnet_on_load_balance;
 
+#if defined(__XSDK__)
+    // Joining always goes to the console's server when there is one; hosting, when asked to.
+    const bool xboxServer = configXboxServerIp[0] != '\0' && (!hosting || configXboxHostOnXboxServer);
+    const char* host = xboxServer ? configXboxServerIp : configCoopNetIp;
+    if (coopnet_is_connected() && strcmp(sConnectedIp, host)) { coopnet_shutdown(); }
     if (coopnet_is_connected()) { return COOPNET_OK; }
+    snprintf(sConnectedIp, sizeof(sConnectedIp), "%s", host);
+#else
+    (void)hosting;
+    if (coopnet_is_connected()) { return COOPNET_OK; }
+    const char* host = configCoopNetIp;
+#endif
 
     char* endptr = NULL;
     uint64_t destId = strtoull(configDestId, &endptr, 10);
 
-    CoopNetRc rc = coopnet_begin(configCoopNetIp, configCoopNetPort, configPlayerName, destId);
+    CoopNetRc rc = coopnet_begin(host, configCoopNetPort, configPlayerName, destId);
     if (rc == COOPNET_FAILED) {
         djui_popup_create(DLANG(NOTIF, COOPNET_CONNECTION_FAILED), 2);
     }

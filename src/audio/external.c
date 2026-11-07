@@ -998,7 +998,7 @@ static void delete_sound_from_bank(u8 bank, u8 soundIndex) {
 static void update_background_music_after_sound(u8 bank, u8 soundIndex) {
     MUTEX_LOCK(gAudioThread);
 
-    if (bank >= SOUND_BANK_COUNT || soundIndex >= SOUND_INDEX_COUNT) { return; }
+    if (bank >= SOUND_BANK_COUNT || soundIndex >= SOUND_INDEX_COUNT) { MUTEX_UNLOCK(gAudioThread); return; }
     if (sSoundBanks[bank][soundIndex].soundBits & SOUND_LOWER_BACKGROUND_MUSIC) {
         sSoundBanksThatLowerBackgroundMusic &= (1 << bank) ^ 0xffff;
         begin_background_music_fade(50);
@@ -1780,7 +1780,7 @@ static void update_game_sound(void) {
 static void seq_player_play_sequence(u8 player, u8 seqId, u16 arg2) {
     MUTEX_LOCK(gAudioThread);
 
-    if (player >= SEQUENCE_PLAYERS) { return; }
+    if (player >= SEQUENCE_PLAYERS) { MUTEX_UNLOCK(gAudioThread); return; }
     u8 targetVolume;
     u8 i;
 
@@ -1830,7 +1830,7 @@ static void seq_player_play_sequence(u8 player, u8 seqId, u16 arg2) {
 void seq_player_fade_out(u8 player, u16 fadeDuration) {
     MUTEX_LOCK(gAudioThread);
 
-    if (player >= SEQUENCE_PLAYERS) { return; }
+    if (player >= SEQUENCE_PLAYERS) { MUTEX_UNLOCK(gAudioThread); return; }
 #if defined(VERSION_EU) || defined(VERSION_SH)
 #ifdef VERSION_EU
     u32 fd = fadeDuration;
@@ -1868,8 +1868,8 @@ static void fade_channel_volume_scale(u8 player, u8 channelIndex, u8 targetScale
     MUTEX_LOCK(gAudioThread);
 
     struct ChannelVolumeScaleFade *temp;
-    if (player >= SEQUENCE_PLAYERS) { return; }
-    if (channelIndex >= CHANNELS_MAX) { return; }
+    if (player >= SEQUENCE_PLAYERS) { MUTEX_UNLOCK(gAudioThread); return; }
+    if (channelIndex >= CHANNELS_MAX) { MUTEX_UNLOCK(gAudioThread); return; }
 
     if (gSequencePlayers[player].channels[channelIndex] != &gSequenceChannelNone) {
         temp = &sVolumeScaleFades[player][channelIndex];
@@ -2090,7 +2090,7 @@ void unused_8031FED0(u8 player, u32 bits, s8 arg2) {
 void seq_player_lower_volume(u8 player, u16 fadeDuration, u8 percentage) {
     MUTEX_LOCK(gAudioThread);
 
-    if (player >= SEQUENCE_PLAYERS) { return; }
+    if (player >= SEQUENCE_PLAYERS) { MUTEX_UNLOCK(gAudioThread); return; }
     if (player == SEQ_PLAYER_LEVEL) {
         sLowerBackgroundMusicVolume = TRUE;
         begin_background_music_fade(fadeDuration);
@@ -2112,7 +2112,7 @@ void seq_player_lower_volume(u8 player, u16 fadeDuration, u8 percentage) {
 void seq_player_unlower_volume(u8 player, u16 fadeDuration) {
     MUTEX_LOCK(gAudioThread);
 
-    if (player >= SEQUENCE_PLAYERS) { return; }
+    if (player >= SEQUENCE_PLAYERS) { MUTEX_UNLOCK(gAudioThread); return; }
     sLowerBackgroundMusicVolume = FALSE;
     if (player == SEQ_PLAYER_LEVEL) {
         if (gSequencePlayers[player].state != SEQUENCE_PLAYER_STATE_FADE_OUT) {
@@ -2306,7 +2306,7 @@ void stop_sound(u32 soundBits, f32 *pos) {
 
     pos = smlua_get_vec3f_for_play_sound(pos);
     u8 bank = (soundBits & SOUNDARGS_MASK_BANK) >> SOUNDARGS_SHIFT_BANK;
-    if (bank >= SOUND_BANK_COUNT) { return; }
+    if (bank >= SOUND_BANK_COUNT) { MUTEX_UNLOCK(gAudioThread); return; }
     u8 soundIndex = sSoundBanks[bank][0].next;
 
     while (soundIndex != 0xff) {
@@ -2360,7 +2360,7 @@ void stop_sounds_from_source(f32 *pos) {
 static void stop_sounds_in_bank(u8 bank) {
     MUTEX_LOCK(gAudioThread);
 
-    if (bank >= SOUND_BANK_COUNT) { return; }
+    if (bank >= SOUND_BANK_COUNT) { MUTEX_UNLOCK(gAudioThread); return; }
     u8 soundIndex = sSoundBanks[bank][0].next;
 
     while (soundIndex != 0xff) {
@@ -2512,7 +2512,7 @@ void set_sequence_player_volume(s32 player, f32 volume) {
 void play_music(u8 player, u16 seqArgs, u16 fadeTimer) {
     MUTEX_LOCK(gAudioThread);
 
-    if (player >= SEQUENCE_PLAYERS) { return; }
+    if (player >= SEQUENCE_PLAYERS) { MUTEX_UNLOCK(gAudioThread); return; }
     u8 seqId = seqArgs & 0xff;
     u8 priority = seqArgs >> 8;
     u8 i;
@@ -2524,13 +2524,13 @@ void play_music(u8 player, u16 seqArgs, u16 fadeTimer) {
     // sequences. Just play them immediately, stopping any old sequence.
     if (player != SEQ_PLAYER_LEVEL) {
         seq_player_play_sequence(player, seqId, fadeTimer);
-        return;
+        { MUTEX_UNLOCK(gAudioThread); return; }
     }
 
     // Abort if the queue is already full.
     if (sBackgroundMusicQueueSize == MAX_BACKGROUND_MUSIC_QUEUE_SIZE) {
         LOG_DEBUG("Background music queue reached max size! Ignoring request to queue sequence %d.", seqId);
-        return;
+        { MUTEX_UNLOCK(gAudioThread); return; }
     }
 
     // If already in the queue, abort, after first restarting the sequence if
@@ -2544,7 +2544,7 @@ void play_music(u8 player, u16 seqArgs, u16 fadeTimer) {
                 stop_background_music(sBackgroundMusicQueue[0].seqId);
             }
             //LOG_DEBUG("Sequence 0x%X is already in the background music queue!", seqId);
-            return;
+            { MUTEX_UNLOCK(gAudioThread); return; }
         }
     }
 
@@ -2588,7 +2588,7 @@ void stop_background_music(u16 seqId) {
     u8 i;
 
     if (sBackgroundMusicQueueSize == 0) {
-        return;
+        { MUTEX_UNLOCK(gAudioThread); return; }
     }
 
     // If sequence is not found, remove an empty queue item (the next empty
@@ -2730,7 +2730,7 @@ void play_secondary_music(u8 seqId, u8 bgMusicVolume, u8 volume, u16 fadeTimer) 
 
     sUnused80332118 = 0;
     if (sCurrentBackgroundMusicSeqId == 0xff || sCurrentBackgroundMusicSeqId == SEQ_MENU_TITLE_SCREEN) {
-        return;
+        { MUTEX_UNLOCK(gAudioThread); return; }
     }
 
     if (sBackgroundMusicTargetVolume == TARGET_VOLUME_UNSET) {
@@ -2772,7 +2772,7 @@ void set_audio_fadeout(u16 fadeDuration) {
     MUTEX_LOCK(gAudioThread);
 
     if (sHasStartedFadeOut) {
-        return;
+        { MUTEX_UNLOCK(gAudioThread); return; }
     }
 
     if (gSequencePlayers[SEQ_PLAYER_LEVEL].enabled == TRUE) {

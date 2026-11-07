@@ -108,7 +108,12 @@ int init_mutex(struct ThreadHandle *handle) {
     int err = pthread_mutexattr_init(&mtattr);
     assert(err == 0);
 
+#if defined(__XSDK__)
+    // The audio worker holds this mutex and re-enters the guarded audio calls.
+    err = pthread_mutexattr_settype(&mtattr, PTHREAD_MUTEX_RECURSIVE);
+#else
     err = pthread_mutexattr_settype(&mtattr, PTHREAD_MUTEX_ERRORCHECK);
+#endif
     assert(err == 0);
 
     int ret = pthread_mutex_init(&handle->mutex, &mtattr);

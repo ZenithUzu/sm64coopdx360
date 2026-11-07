@@ -139,6 +139,14 @@ bool djui_three_panel_render(struct DjuiBase* base) {
         djui_base_set_alignment(head, DJUI_HALIGN_LEFT, DJUI_VALIGN_TOP);
     }
 
+#if defined(__XSDK__)
+    if (body->render == djui_flow_layout_render && threePanel->bodySize.type == DJUI_SVT_ABSOLUTE) {
+        const f32 overflow = threePanel->bodySize.value - bodySize;
+        const f32 along = bodySize > 0 ? (gCursorY - (base->comp.y + tPad + headerSize)) / bodySize : 0;
+        ((struct DjuiFlowLayout*)body)->scrollOffset = overflow > 0 ? overflow * fmax(0, fmin(1, along)) : 0;
+    }
+#endif
+
     if (body != NULL) {
         djui_base_set_location_type(body, DJUI_SVT_ABSOLUTE, DJUI_SVT_ABSOLUTE);
         djui_base_set_location(body, 0, headerSize);

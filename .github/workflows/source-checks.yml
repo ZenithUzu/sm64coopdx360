@@ -35,6 +35,12 @@ jobs:
         run: |
           cc -std=c99 -Wall -Wextra -Werror -Isrc/pc/network/packets platform/xsdk/tests/packet_safe_path_test.c -o /tmp/packet_safe_path_test
           /tmp/packet_safe_path_test
+      - name: Test FATX long names
+        run: |
+          cc -std=c99 -Wall -Wextra -Werror -Iplatform/xsdk platform/xsdk/tests/fatx_names_test.c -o /tmp/fatx_names_test
+          /tmp/fatx_names_test
+      - name: Test audio mutex balance
+        run: python3 platform/xsdk/tests/audio_mutex_balance_test.py
       - name: Test the display LUT curve
         run: |
           cc -std=c99 -Wall -Wextra -Werror -Isrc/pc/gfx platform/xsdk/tests/gfx_xsdk_lut_test.c -lm -o /tmp/gfx_xsdk_lut_test

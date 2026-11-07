@@ -54,6 +54,10 @@ int conn_poll_run(conn_registry_t *registry);
 
 static thread_return_t THREAD_CALL conn_thread_entry(void *arg) {
 	thread_set_name_self("juice poll");
+#if defined(__XSDK__)
+	extern int xsdk_thread_move(unsigned int hardware_thread);
+	xsdk_thread_move(3); // threads start on their creator's hardware thread, which here is the game's
+#endif
 	conn_registry_t *registry = (conn_registry_t *)arg;
 	conn_poll_run(registry);
 	return (thread_return_t)0;
