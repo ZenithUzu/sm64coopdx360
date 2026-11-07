@@ -244,6 +244,8 @@ bool         configXboxPublicLobby                = false;
 char         configXboxServerIp[MAX_CONFIG_STRING] = "";
 bool         configXboxHostOnXboxServer           = false;
 unsigned int configXboxRenderScale                = 0;
+bool configXboxShadows                            = true;
+unsigned int configXboxUpscaleFilter              = 1;
 #endif
 // other
 unsigned int configRulesVersion                   = 0;
@@ -411,6 +413,8 @@ static const struct ConfigOption options[] = {
     {.name = "xbox_server_ip",                 .type = CONFIG_TYPE_STRING, .stringValue = (char*)&configXboxServerIp, .maxStringLength = MAX_CONFIG_STRING},
     {.name = "xbox_host_on_xbox_server",       .type = CONFIG_TYPE_BOOL,   .boolValue   = &configXboxHostOnXboxServer},
     {.name = "xbox_render_scale",              .type = CONFIG_TYPE_UINT,   .uintValue   = &configXboxRenderScale},
+    {.name = "xbox_shadows",                   .type = CONFIG_TYPE_BOOL,   .boolValue   = &configXboxShadows},
+    {.name = "xbox_upscale_filter",            .type = CONFIG_TYPE_UINT,   .uintValue   = &configXboxUpscaleFilter},
 #endif
     // other
     {.name = "rules_version",                  .type = CONFIG_TYPE_UINT,   .uintValue   = &configRulesVersion},
@@ -844,6 +848,7 @@ NEXT_OPTION:
 #ifdef __XSDK__
     if (configXboxOutputGamma < 70 || configXboxOutputGamma > 130) { configXboxOutputGamma = 100; }
     if (configXboxRenderScale > 2) { configXboxRenderScale = 0; }
+    if (configXboxUpscaleFilter > 1) { configXboxUpscaleFilter = 1; }
 #endif
 
     if (gCLIOpts.fullscreen == 1) {

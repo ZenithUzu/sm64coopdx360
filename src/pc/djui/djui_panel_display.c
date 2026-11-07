@@ -120,8 +120,14 @@ void djui_panel_display_create(struct DjuiBase* caller) {
         djui_base_set_enabled(&selectionbox1->base, (configFrameLimit > 30 || configFramerateMode != RRM_MANUAL));
         sInterpolationSelectionBox = selectionbox1;
 
+#ifdef __XSDK__
+        if (configFiltering > 1) { configFiltering = 1; }
+        char* filterChoices[2] = { DLANG(DISPLAY, NEAREST), DLANG(DISPLAY, LINEAR) };
+        djui_selectionbox_create(body, DLANG(DISPLAY, FILTERING), filterChoices, 2, &configFiltering, NULL);
+#else
         char* filterChoices[3] = { DLANG(DISPLAY, NEAREST), DLANG(DISPLAY, LINEAR), DLANG(DISPLAY, TRIPOINT) };
         djui_selectionbox_create(body, DLANG(DISPLAY, FILTERING), filterChoices, 3, &configFiltering, NULL);
+#endif
 
         int maxMsaa = gWindowApi->get_max_msaa();
         if (maxMsaa >= 2) {
@@ -154,8 +160,11 @@ void djui_panel_display_create(struct DjuiBase* caller) {
 #ifdef __XSDK__
         djui_slider_create(body, "Gamma de salida (TV)", &configXboxOutputGamma, 70, 130, djui_panel_display_output_levels_change);
         djui_checkbox_create(body, "Rango limitado (TV)", &configXboxLimitedRange, djui_panel_display_output_levels_change);
-        char* renderScaleChoices[3] = { "100% (1280x720)", "75% (960x540)", "50% (640x360)" };
+        char* renderScaleChoices[3] = { "100% (1280x720)", "75% (960x536)", "50% (640x360)" };
         djui_selectionbox_create(body, "Resolucion (al reiniciar)", renderScaleChoices, 3, &configXboxRenderScale, NULL);
+        djui_checkbox_create(body, "Sombras originales", &configXboxShadows, NULL);
+        char* upscaleChoices[2] = { "Nitido (vecino cercano)", "Suave (bilineal)" };
+        djui_selectionbox_create(body, "Ampliacion (al reiniciar)", upscaleChoices, 2, &configXboxUpscaleFilter, NULL);
 #endif
 
         djui_button_create(body, DLANG(MENU, BACK), DJUI_BUTTON_STYLE_BACK, djui_panel_menu_back);

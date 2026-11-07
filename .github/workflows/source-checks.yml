@@ -1,7 +1,7 @@
 name: Source checks
 on:
   push:
-    branches: [main]
+    branches: [main, feature/image-quality]
   pull_request:
   workflow_dispatch:
 permissions:

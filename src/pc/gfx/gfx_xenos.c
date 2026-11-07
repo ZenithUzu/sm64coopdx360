@@ -8,6 +8,7 @@
 #include "xsdk/log.h"
 #include "xsdk/shader.h"
 #include "xsdk/texture.h"
+#include "pc/configfile.h"
 #include "gfx_cc.h"
 #include "gfx_xsdk.h"
 #include "gfx_xenos.h"
@@ -386,7 +387,7 @@ static void init(void) {
     set_viewport(0,0,(int)width,(int)height); set_scissor(0,0,(int)width,(int)height);
     checked(xsdk_texture_create(&scene_texture,XSDK_FORMAT_R8G8B8A8,width,height,1,true),"scene target allocation");
     XsdkSampler scene_filter={0};
-    scene_filter.mag_filter=scene_filter.min_filter=XSDK_FILTER_LINEAR;
+    scene_filter.mag_filter=scene_filter.min_filter=configXboxUpscaleFilter ? XSDK_FILTER_LINEAR : XSDK_FILTER_POINT;
     scene_filter.address_u=scene_filter.address_v=XSDK_ADDRESS_CLAMP;
     xsdk_texture_sampler_state(&scene_sampler,&scene_filter);
     checked(xsdk_shader_load(&upscale_vertex,upscale_vert.container,upscale_vert.container_bytes),"upscale vertex shader");

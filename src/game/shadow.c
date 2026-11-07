@@ -1,3 +1,6 @@
+#ifdef __XSDK__
+#include "pc/configfile.h"
+#endif
 #include <PR/ultratypes.h>
 #include <PR/gbi.h>
 #include <math.h>
@@ -921,6 +924,14 @@ Gfx *create_shadow_hardcoded_rectangle(f32 xPos, f32 yPos, f32 zPos, UNUSED s16 
  */
 Gfx *create_shadow_below_xyz(f32 xPos, f32 yPos, f32 zPos, s16 shadowScale, u8 shadowSolidity,
                              s8 shadowType) {
+#ifdef __XSDK__
+    if (!configXboxShadows) {
+        gShadowAboveWaterOrLava = FALSE;
+        gMarioOnIceOrCarpet = 0;
+        sMarioOnFlyingCarpet = 0;
+        return NULL;
+    }
+#endif
     Gfx *displayList = NULL;
     struct Surface *pfloor;
     f32 height = find_floor(xPos, yPos, zPos, &pfloor);

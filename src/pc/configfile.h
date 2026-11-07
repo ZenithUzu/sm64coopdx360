@@ -186,6 +186,8 @@ extern bool         configXboxPublicLobby;
 extern char         configXboxServerIp[MAX_CONFIG_STRING];
 extern bool         configXboxHostOnXboxServer;
 extern unsigned int configXboxRenderScale;
+extern bool configXboxShadows;
+extern unsigned int configXboxUpscaleFilter;
 #endif
 // other
 extern unsigned int configRulesVersion;
